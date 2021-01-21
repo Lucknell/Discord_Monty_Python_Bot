@@ -5,12 +5,13 @@ import time
 import asyncio
 import requests
 import random
-import configparser
-import faulthandler
-import sys
-import pytesseract
 import shutil
+import configparser
+import pytesseract
 import re
+import logging
+from wikipedia import wikipedia
+from lyrics import lyric_finder, SongNotFoundError
 import numpy as np
 from datetime import datetime
 from PIL import Image
@@ -25,12 +26,16 @@ client.remove_command('help')  # remove the default help message
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-faulthandler.enable(file=sys.stderr, all_threads=True)
-
 avatar_path = "/src/bot/avatar.png"
 fp = open(avatar_path, 'rb')
-file = "/src/files/tracking.json"
 avatar = fp.read()
+
+logger = logging.getLogger("discord")
+logger.setLevel(logging.INFO)  # Do not allow DEBUG messages through
+handler = logging.FileHandler(filename="bot.log", encoding="utf-8", mode="w")
+handler.setFormatter(logging.Formatter(
+    "{asctime}: {levelname}: {name}: {message}", style="{"))
+logger.addHandler(handler)
 
 helpMessage = discord.Embed(
     title="Help message and the quest for the holy grail",
@@ -40,10 +45,10 @@ helpMessage = discord.Embed(
 
 helpMessage.set_footer(text="plz send help I have been on since")
 helpMessage.add_field(
-    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL\n")
+    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL of an image\n")
 helpMessage.add_field(name="voice chat commands",
                       value="$say something\n$parler omelette au fromage\n$hablar tengo un gato en mis pantalones\n\
-                          $skazat медведь на одноколесном велосипеде\n$zip 33016\n$dire something italian")
+                          $skazat медведь на одноколесном велосипеде\n$dire something italian\n$zip 33016\n$sing song name\n$canta song name")
 helpMessage.add_field(
     name="Games", value="I wish to cross the bridge of death\nMad Minute\nGame show\ntic-tac-toe\n")
 queue = {}
@@ -94,7 +99,7 @@ async def hanasu(ctx):
     await TTStime(ctx, "hanasu", 39)
 
 
-@client.command()
+@client.command(aliases=['jouer'])
 async def game(ctx):
     await ctx.send("What do you want to do " + (ctx.author.nick if ctx.author.nick != None else ctx.author.name) + "?")
     try:
@@ -108,22 +113,30 @@ async def game(ctx):
     elif msg.content.lower() == "game show":
         await game_show(ctx)
     elif msg.content.lower() == "tic tac toe" or msg.content.lower() == "tic-tac-toe":
-        await tic_tac_toe(ctx) 
+        await tic_tac_toe(ctx)
     else:
         return await ctx.send("You what? Get some $help")
 
 
-@client.command()
+@client.command(aliases=['disconnect', 'leave'])
 async def dc(ctx):
-    x = ctx.message.author.voice.channel
-    if x:
+    if ctx.message.author.voice.channel:
         serverQueue = queue.get(ctx.message.guild.id)
-        if(serverQueue == None):
+        if serverQueue == None:
             return
         await serverQueue.connection.disconnect()
-        for f in serverQueue.speeches:
-            os.remove(f)
         queue.pop(ctx.message.guild.id)
+
+
+@client.command()
+@commands.has_role('Monty\'s keeper')
+async def skip(ctx):
+    if not ctx.message.author.voice.channel:
+        return
+    serverQueue = queue.get(ctx.message.guild.id)
+    if serverQueue == None:
+        return
+    serverQueue.connection.stop()
 
 
 @client.command()
@@ -135,28 +148,25 @@ async def status(ctx):
 
 
 @client.command()
-async def zip(ctx):
-    #names = ["Al Roker, Ollie"]
-    error_cases = ["https://tenor.com/view/family-guy-ollie-williams-its-raining-side-ways-weatherman-weather-gif-5043009","https://tenor.com/view/rain-its-gon-rain-weather-report-gif-5516318"]
-    #await client.user.edit(username=names[random.randint(0, len(names) - 1)])
+async def zip(ctx, arg=None):
+    error_cases = ["https://tenor.com/view/family-guy-ollie-williams-its-raining-side-ways-weatherman-weather-gif-5043009",
+                   "https://tenor.com/view/rain-its-gon-rain-weather-report-gif-5516318"]
+    # await client.user.edit(username=names[random.randint(0, len(names) - 1)])
+    if not arg:
+        return await ctx.send(error_cases[random.randint(0, len(error_cases) - 1)])
     API_key = config['openweathermap']['api_key']
     base_url = "http://api.openweathermap.org/data/2.5/weather?"
-    zip_code = ctx.message.content.lower().split("zip ")
-    if len(zip_code) != 2:
-        #await client.user.edit(username=Bot_Name)
-        await ctx.send("That is a format error. Please get some $help")
-        return await ctx.send(error_cases[random.randint(0, len(error_cases) - 1)])
-    Final_url = base_url + "appid=" + API_key + "&zip=" + zip_code[1].strip()
+    Final_url = base_url + "appid=" + API_key + "&zip=" + arg
     weather_data = requests.get(Final_url).json()
-    #print(weather_data)
+    # print(weather_data)
     if weather_data["cod"] == "404":
-        #await client.user.edit(username=Bot_Name)
+        # await client.user.edit(username=Bot_Name)
         return await ctx.send("invalid zipcode")
     #enhanced_url = "https://api.openweathermap.org/data/2.5/onecall?lat={}&lon={}&exclude={}&appid={}"
     #exclude = "minutely,hourly,daily"
-    #enhanced_weather_data = requests.get(enhanced_url.format(
-    #    weather_data["coord"]["lat"], weather_data["coord"]["lon"], exclude, API_key)).json()
-    #print(enhanced_weather_data)
+    # enhanced_weather_data = requests.get(enhanced_url.format(
+    # weather_data["coord"]["lat"], weather_data["coord"]["lon"], exclude, API_key)).json()
+    # print(enhanced_weather_data)
     temp = str(round(KtoF(weather_data["main"]["temp"]), 1))
     feels_like = str(round(KtoF(weather_data["main"]["feels_like"]), 1))
     temp_min = str(round(KtoF(weather_data["main"]["temp_min"]), 1))
@@ -168,15 +178,14 @@ async def zip(ctx):
     weather_talk = "Currently the weather for {} is, {} with {}, the temperature is {} degrees Fahrenheit. \
 It currently feels like {} degrees Fahrenheit. The low and high are {} and {}. The humidity is at \
 {}% with a wind speed of {} mph moving {}. Have a good day {}"
-    weather_talk = weather_talk.format(weather_data["name"], weather_data["weather"][0]["main"], 
-        weather_data["weather"][0]["description"], temp, feels_like, temp_min, temp_max,
-        humidity, wind_speed, wind_dir, (ctx.message.author.nick if ctx.message.author.nick != None else ctx.message.author.name))
-    v_channel = ctx.message.author.voice
-    if v_channel:
+    weather_talk = weather_talk.format(weather_data["name"], weather_data["weather"][0]["main"],
+                                       weather_data["weather"][0]["description"], temp, feels_like, temp_min, temp_max,
+                                       humidity, wind_speed, wind_dir, (ctx.message.author.nick if ctx.message.author.nick != None else ctx.message.author.name))
+    if ctx.message.author.voice:
         await TTStime(ctx, "", 14, say=weather_talk, rate=125)
     else:
         await ctx.send(weather_talk)
-    #await client.user.edit(username=Bot_Name)
+    # await client.user.edit(username=Bot_Name)
 
 
 @client.command()
@@ -185,8 +194,7 @@ async def joke(ctx):
     url = "https://icanhazdadjoke.com/"
     joke_data = requests.get(url, headers=headers).json()
     await ctx.send(joke_data["joke"])
-    v_channel = ctx.message.author.voice
-    if v_channel:
+    if ctx.message.author.voice:
         await TTStime(ctx, "", 17, joke_data["joke"])
 
 
@@ -199,8 +207,10 @@ async def fact(ctx):
 
 
 @client.command()
-async def totext(ctx, args):
-    url = valid_URL(args)
+async def totext(ctx, arg=None):
+    if not arg:
+        return await ctx.send("Try that again but give me a URL to an image next time")
+    url = valid_URL(arg)
     if not url:
         return await ctx.send("invalid URL")
     url = url.string
@@ -214,18 +224,54 @@ async def totext(ctx, args):
         os.remove(filename)
         return await ctx.send("Not an image")
     text = pytesseract.image_to_string(img)
-    #print(text)
     os.remove(filename)
     await ctx.send(text)
 
 
 @client.command()
-async def good(ctx, args):
-    pass
+async def good(ctx, arg):
+    if arg.lower() == "bot":
+        await ctx.message.add_reaction("😄")
+
+
+@client.command()
+async def bad(ctx, arg):
+    if arg.lower() == "bot":
+        await ctx.send("alright then.")
+
+
+@client.command()
+async def sing(ctx, *, args):
+    await __sing(ctx, args, 17)
+
+
+@client.command()
+async def canta(ctx, *, args):
+    await __sing(ctx, args, 18)
+
+
+async def __sing(ctx, args, lang):
+    #return await ctx.send("This function is disabled")
+    try:
+        song = lyric_finder(args)
+    except SongNotFoundError:
+        return await ctx.send("Song could not be found")
+    await ctx.send("Sing along here\n{}".format(song.URL))
+    for i in range(0, 2, 1):
+        await TTStime(ctx, "", lang, song.lyric_array[i], name=str(random.randint(0, 10000)))
+
+
+@client.command()
+async def wiki(ctx, *, args):
+    wiki = wikipedia(args)
+    try:
+        return await ctx.send("{} \nRead more here: {}".format(wiki.summary, wiki.url))
+    except AttributeError:
+        return await ctx.send("No articles found")
 
 
 def wind_degree(int):
-    if (int > 345 and int < 361) or (int>-1 and int <16):
+    if (int > 345 and int < 361) or (int > -1 and int < 16):
         return "N"
     elif int > 15 and int < 36:
         return "N/NE"
@@ -261,7 +307,6 @@ def wind_degree(int):
         return "You really shouldn't be seeing this..."
 
 
-
 def valid_URL(str):
     return re.search(r"^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$", str)
 
@@ -288,14 +333,16 @@ async def tic_tac_toe(ctx):
     await message.add_reaction("7️⃣")
     await message.add_reaction("8️⃣")
     board = "0️⃣1️⃣2️⃣\n3️⃣4️⃣5️⃣\n6️⃣7️⃣8️⃣"
-    vboard = ["c","c","c","c","c","c","c","c","c"]
-    current = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣']
+    vboard = ["c", "c", "c", "c", "c", "c", "c", "c", "c"]
+    current = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣']
     await message.edit(content=board)
     ticker = await ctx.send("Your move")
+
     def check_reaction(user):
         def inner_check(reaction, author):
             return user == author and str(reaction.emoji) in current
         return inner_check
+
     def check_winner(member):
         if vboard[0] != "c" and vboard[0] == vboard[1] and vboard[1] == vboard[2]:
             if vboard[0] == "x":
@@ -340,10 +387,10 @@ async def tic_tac_toe(ctx):
         else:
             return None
 
-    while len(current) !=0:
+    while len(current) != 0:
         await ticker.edit(content="Your move")
         try:
-            #returns a tuple with a reaction and member object 
+            # returns a tuple with a reaction and member object
             reaction, member = await client.wait_for('reaction_add', timeout=30, check=check_reaction(ctx.author))
         except asyncio.TimeoutError:
             return await ticker.edit(content="Game over")
@@ -351,7 +398,7 @@ async def tic_tac_toe(ctx):
         if not str(reaction.emoji) in current:
             return await ctx.send("wait that was illegal")
         current.remove(reaction.emoji)
-        board = board.replace(reaction.emoji,"❌")
+        board = board.replace(reaction.emoji, "❌")
         num = int(reaction.emoji[0])
         vboard[num] = "x"
         await message.edit(content=board)
@@ -401,18 +448,18 @@ async def tic_tac_toe(ctx):
             elif vboard[5] == "x" and vboard[5] == vboard[8] and vboard[2] == "c":
                 choice = current.index("2️⃣")
             elif vboard[4] == "x" and vboard[4] == vboard[0] and vboard[8] == "c":
-                choice = current.index("8️⃣")    
+                choice = current.index("8️⃣")
             elif vboard[4] == "x" and vboard[4] == vboard[2] and vboard[6] == "c":
-                choice = current.index("6️⃣")    
+                choice = current.index("6️⃣")
             elif vboard[4] == "x" and vboard[4] == vboard[8] and vboard[0] == "c":
-                choice = current.index("0️⃣")    
+                choice = current.index("0️⃣")
             elif vboard[4] == "x" and vboard[4] == vboard[6] and vboard[2] == "c":
-                choice = current.index("2️⃣")    
+                choice = current.index("2️⃣")
             else:
                 choice = random.randint(0, len(current) - 1)
         else:
             choice = random.randint(0, len(current) - 1)
-        board = board.replace(current[choice],"⭕")
+        board = board.replace(current[choice], "⭕")
         num = int(current[choice][0])
         vboard[num] = "o"
         current.remove(current[choice])
@@ -722,11 +769,8 @@ class GameShow:
         self.score = score
         self.quitting = quitting
 
-    # def __eq__(self, other):
-    #    return self.member == other.member
 
-
-async def TTStime(ctx, speak, lang, say=None, rate=None):
+async def TTStime(ctx, speak, lang, say=None, rate=None, name=""):
     if not say:
         temp = ctx.message.content.lower().split(speak)
         temp = await shift(temp)
@@ -740,32 +784,25 @@ async def TTStime(ctx, speak, lang, say=None, rate=None):
         serverQueue = queue.get(ctx.message.guild.id)
         millis = int(round(time.time() * 1000))
         # no name conflicts should be possible
-        file = "voice" + str(millis) + str(ctx.message.author.id) + ".mp3"
-        engine = pyttsx3.init()
+        file = "voice" + str(millis) + \
+            str(ctx.message.author.id) + name + ".mp3"
         if not rate:
-            engine.setProperty('rate', 175)
-        else:
-            engine.setProperty('rate', rate)
-        voices = engine.getProperty('voices')
-        voice = voices[lang]
-        engine.setProperty('voice', voice.id)
-        engine.save_to_file(speech, file)
-        engine.runAndWait()
+            rate = 175
         if serverQueue != None:
-            return serverQueue.speeches.append(file)
+            return serverQueue.speeches.append((speech, file, rate, lang))
         try:
             voice_client = discord.utils.get(
                 client.voice_clients, guild=ctx.message.guild)
             if voice_client and voice_client.is_connected():
                 serverQueue = SpeechQ(ctx.message.channel, [
-                                      file], voice_client, 1)
+                                      (speech, file, rate, lang)], voice_client, 1)
                 queue.update({ctx.message.guild.id: serverQueue})
             else:
                 connection = await v_channel.channel.connect(timeout=20, reconnect=True)
                 serverQueue = SpeechQ(ctx.message.channel, [
-                                      file], connection, 1)
+                                      (speech, file, rate, lang)], connection, 1)
                 queue.update({ctx.message.guild.id: serverQueue})
-            play(ctx.message.guild, file)
+            play_next(ctx.message.guild)
         except discord.errors.ClientException:
             return
         except Exception as e:
@@ -773,21 +810,7 @@ async def TTStime(ctx, speak, lang, say=None, rate=None):
             print("Exception?")
             await connection.disconnect(force=True)
     else:
-        ctx.message.channel.send("you are not in a voice channel")
-
-
-def play(guild, filename):
-    serverQueue = queue.get(guild.id)
-    if not serverQueue:
-        return
-
-    if(filename == None):
-        queue.pop(guild.id)
-    try:
-        serverQueue.connection.play(discord.FFmpegPCMAudio(
-            filename), after=lambda x: play_next(guild))
-    except discord.errors.ClientException:
-        pass
+        await ctx.message.channel.send("you are not in a voice channel")
 
 
 def play_next(guild):
@@ -795,22 +818,40 @@ def play_next(guild):
     if not serverQueue:
         return
 
-    os.remove(serverQueue.speeches[0])
-    serverQueue.speeches.pop(0)
-
     if len(serverQueue.speeches) == 0:
         queue.pop(guild.id)
         future = asyncio.run_coroutine_threadsafe(
             serverQueue.connection.disconnect(), client.loop)
         try:
-            future.result(timeout=1)
+            future.result(timeout=60)
         except asyncio.TimeoutError:
             print('The coroutine took too long, cancelling the task...')
-            future.cancel()
+            return future.cancel()
     else:
+        tupleQ = serverQueue.speeches.pop(0)
+        create_voice(tupleQ)
+        # the mp3 file is not ready right away
+        time.sleep(len(tupleQ[0])* .005)
         serverQueue.connection.play(discord.FFmpegPCMAudio(
-            serverQueue.speeches[0]), after=lambda x: play_next(guild))
+            tupleQ[1]), after=lambda x: clean_up(guild, tupleQ[1]))
     return
+
+
+def clean_up(guild, file):
+    if file:
+        os.remove(file)
+    play_next(guild)
+
+
+def create_voice(tupleQ):
+    engine = pyttsx3.init()
+    engine.setProperty('rate', tupleQ[2])
+    voices = engine.getProperty('voices')
+    voice = voices[tupleQ[3]]
+    engine.setProperty('voice', voice.id)
+    engine.save_to_file(tupleQ[0], tupleQ[1])
+    engine.runAndWait()
+    engine.stop()
 
 
 async def join(list, word):
