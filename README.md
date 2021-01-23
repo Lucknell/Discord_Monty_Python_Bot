@@ -30,7 +30,7 @@ The prefix for this bot is `$`
 | $fact | Sends a fact from https://useless-facts.sameerkumar.website/api API. 
 | $totext URL to a image with text | Sends a message with what Monty thinks was in the image. |
 | $wiki subject | Returns a wikipedia article of the subject given assuming there is a wikipedia article for the subject. |
-| $quote "tv|book|movies" search string | This will search quotes.net for your search string and return to you a quote. |
+| $quote `tv|book|movies` search string | This will search quotes.net for your search string and return to you a quote. |
 | $game | This will have Monty ask you which game you wish to play |
 | $jouer | An alias for `$game` |
 
