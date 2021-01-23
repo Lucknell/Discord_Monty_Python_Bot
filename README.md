@@ -3,11 +3,11 @@ A bot that will help you on your quest for the holy grail
 
 Add [this bot](https://discordapp.com/oauth2/authorize?client_id=774527385843662858&scope=bot&permissions=97344) to your server! Monty uses a few special APIs and beautifulsoup 4 along with other applications to bring a great experience for all.
 
-##How this got started
+## How this got started
 
 A friend of mine gave me the idea to name this bot Monty Python for the sole reason of that I wanted to make a discord bot in Python. This bot was written using discord.py which can be found [here.](https://discordpy.readthedocs.io/en/latest/index.html) The discord.py documentation will help you get started on making your own bot if you wanted.
 
-##Features of this bot
+## Features of this bot
 
 The prefix for this bot is `$`
 | Command | Description |
