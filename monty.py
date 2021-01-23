@@ -12,6 +12,7 @@ import re
 import logging
 from wikipedia import wikipedia
 from lyrics import lyric_finder, SongNotFoundError
+from quote import quote_finder, InvalidCategoryGiven, QuoteNotFoundError
 import numpy as np
 from datetime import datetime
 from PIL import Image
@@ -251,7 +252,7 @@ async def canta(ctx, *, args):
 
 
 async def __sing(ctx, args, lang):
-    #return await ctx.send("This function is disabled")
+    # return await ctx.send("This function is disabled")
     try:
         song = lyric_finder(args)
     except SongNotFoundError:
@@ -269,6 +270,25 @@ async def wiki(ctx, *, args):
     except AttributeError:
         return await ctx.send("No articles found")
 
+
+@client.command()
+async def quote(ctx, category, *, search=None):
+    try:
+        quote = quote_finder(category, search)
+    except QuoteNotFoundError:
+        return await ctx.send("No quotes found")
+    except InvalidCategoryGiven:
+        return await ctx.send("get some $help you gave an invalid category.")
+    if len(quote.quote) > 2000:
+        await ctx.send(quote.quote[0:2000])
+        return await ctx.send(quote.quote_URL)
+    else:
+        return await ctx.send("{}\n{}".format(quote.quote, quote.quote_URL))
+
+
+@client.command()
+async def about(ctx):
+    return await ctx.send("You can learn more about me here\nhttps://github.com/Lucknell/Discord_Monty_Python_Bot")
 
 def wind_degree(int):
     if (int > 345 and int < 361) or (int > -1 and int < 16):
@@ -831,7 +851,7 @@ def play_next(guild):
         tupleQ = serverQueue.speeches.pop(0)
         create_voice(tupleQ)
         # the mp3 file is not ready right away
-        time.sleep(len(tupleQ[0])* .005)
+        time.sleep(len(tupleQ[0]) * .005)
         serverQueue.connection.play(discord.FFmpegPCMAudio(
             tupleQ[1]), after=lambda x: clean_up(guild, tupleQ[1]))
     return
