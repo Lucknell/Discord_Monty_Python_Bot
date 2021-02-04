@@ -13,6 +13,7 @@ import logging
 from wikipedia import wikipedia
 from lyrics import lyric_finder, SongNotFoundError
 from quote import quote_finder, InvalidCategoryGiven, QuoteNotFoundError
+from Fermi import Fermi
 import numpy as np
 from datetime import datetime
 from PIL import Image
@@ -46,12 +47,12 @@ helpMessage = discord.Embed(
 
 helpMessage.set_footer(text="plz send help I have been on since")
 helpMessage.add_field(
-    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL of an image\n")
+    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL of an image\n$wiki topic\n$wiki_info topic")
 helpMessage.add_field(name="voice chat commands",
                       value="$say something\n$parler omelette au fromage\n$hablar tengo un gato en mis pantalones\n\
                           $skazat медведь на одноколесном велосипеде\n$dire something italian\n$zip 33016\n$sing song name\n$canta song name")
 helpMessage.add_field(
-    name="Games", value="I wish to cross the bridge of death\nMad Minute\nGame show\ntic-tac-toe\n")
+    name="Games", value="I wish to cross the bridge of death\nMad Minute\nGame show\ntic-tac-toe\nFermi\n")
 queue = {}
 
 
@@ -73,6 +74,13 @@ async def help(ctx):
 @client.command()
 async def say(ctx):
     await TTStime(ctx, "say", 17)
+
+
+@client.command()
+async def speak(ctx, multipier=None, *, speech=None):
+    if not multipier or not speech:
+        return
+    await TTStime(ctx, "", 10, speech, multipier)
 
 
 @client.command()
@@ -115,6 +123,8 @@ async def game(ctx):
         await game_show(ctx)
     elif msg.content.lower() == "tic tac toe" or msg.content.lower() == "tic-tac-toe":
         await tic_tac_toe(ctx)
+    elif msg.content.lower() == "fermi":
+        await fermi(ctx)
     else:
         return await ctx.send("You what? Get some $help")
 
@@ -251,15 +261,19 @@ async def canta(ctx, *, args):
     await __sing(ctx, args, 18)
 
 
-async def __sing(ctx, args, lang):
+@client.command()
+async def sing_genius(ctx, *, args):
+    await __sing(ctx, args, 17, "genius")
+
+
+async def __sing(ctx, args, lang, provider="azlyrics"):
     # return await ctx.send("This function is disabled")
     try:
-        song = lyric_finder(args)
+        song = lyric_finder(args, provider)
     except SongNotFoundError:
         return await ctx.send("Song could not be found")
     await ctx.send("Sing along here\n{}".format(song.URL))
-    for i in range(0, 2, 1):
-        await TTStime(ctx, "", lang, song.lyric_array[i], name=str(random.randint(0, 10000)))
+    await TTStime(ctx, "", lang, song.lyrics[0:850], name=str(random.randint(0, 10000)))
 
 
 @client.command()
@@ -267,6 +281,28 @@ async def wiki(ctx, *, args):
     wiki = wikipedia(args)
     try:
         return await ctx.send("{} \nRead more here: {}".format(wiki.summary, wiki.url))
+    except AttributeError:
+        return await ctx.send("No articles found")
+    except discord.errors.HTTPException:
+        await ctx.send(wiki.summary[0:2000])
+        return await ctx.send("Read more here: {}".format(wiki.url))
+
+
+@client.command()
+async def wiki_info(ctx, *, args):
+    wiki = wikipedia(args)
+    info_box = ""
+    try:
+        if not wiki.infobox:
+            return await ctx.send("No infobox found")
+        for info in wiki.infobox:
+            info_box += info
+            info_box += "\n"
+        if len(info_box) < 2000:
+            return await ctx.send("{} \nRead more here: {}".format(info_box, wiki.url))
+        else:
+            await ctx.send(info_box[0:2000])
+            return await ctx.send("Read more here: {}".format(wiki.url))
     except AttributeError:
         return await ctx.send("No articles found")
 
@@ -487,6 +523,36 @@ async def tic_tac_toe(ctx):
         await message.edit(content=board)
         if win:
             return await ticker.edit(content=win)
+
+
+async def fermi(ctx):
+    rounds = 5
+    winning = "Fermi Fermi Fermi"
+    f = Fermi()
+    await ctx.send((ctx.author.nick if ctx.author.nick != None else ctx.author.name) + " at anytime you can type quit to quit\nWhat is your first guess?")
+    try:
+        msg = await client.wait_for('message', check=check(ctx.author), timeout=60)
+    except asyncio.TimeoutError:
+        return await ctx.send("Nothing? Got it.")
+    win = f.check_win(msg.content)
+    await ctx.send(win)
+    rounds -= 1
+    while (rounds > 0 and win != winning) and win.lower() != "quit":
+        await ctx.send((ctx.author.nick if ctx.author.nick != None else ctx.author.name) + "\nWhat is your next guess? (Guesses remaining {})".format(rounds))
+        try:
+            msg = await client.wait_for('message', check=check(ctx.author), timeout=60)
+        except asyncio.TimeoutError:
+            return await ctx.send("Nothing? Got it. The answer was {}".format(f.get_cheats()))
+        win = f.check_win(msg.content)
+        await ctx.send(win)
+        rounds -= 1
+    if win == winning:
+        return await ctx.send("You got it!")
+    else:
+        return await ctx.send("There is always next time. The answer was {}".format(f.get_cheats()))
+    
+
+
 
 
 async def game_show(ctx):
@@ -804,6 +870,7 @@ async def TTStime(ctx, speak, lang, say=None, rate=None, name=""):
         serverQueue = queue.get(ctx.message.guild.id)
         millis = int(round(time.time() * 1000))
         # no name conflicts should be possible
+        #await ctx.message.delete()
         file = "voice" + str(millis) + \
             str(ctx.message.author.id) + name + ".mp3"
         if not rate:
@@ -859,7 +926,10 @@ def play_next(guild):
 
 def clean_up(guild, file):
     if file:
-        os.remove(file)
+        try:
+            os.remove(file)
+        except FileNotFoundError as e:
+            print(e)
     play_next(guild)
 
 
