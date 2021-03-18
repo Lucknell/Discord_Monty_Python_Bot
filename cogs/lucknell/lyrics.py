@@ -35,8 +35,9 @@ class lyric_finder:
         __request = __session.get(self.URL)
         __soup = BeautifulSoup(__request.content, 'html.parser')
         __page = __soup.find(
-            class_="col-xs-12 col-lg-8 text-center").find_all("div")
-        self.lyrics = __page[5].text
+            class_="col-xs-12 col-lg-8 text-center")
+        self.title = __page.findAll("b")[1].text
+        self.lyrics = __page.find_all("div")[5].text
 
     def search_genius(self, search):
         options = Options()
@@ -66,6 +67,9 @@ class lyric_finder:
         __soup = BeautifulSoup(__request.content, 'html.parser')
         __page = __soup.find(class_="lyrics")
         self.lyrics = __page.text
+        __page = __soup.find(class_="header_with_cover_art-primary_info-title")
+        self.title = __page.text
+        
 
 
 class SongNotFoundError(Exception):
