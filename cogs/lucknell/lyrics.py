@@ -7,6 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 import geckodriver_autoinstaller
+import re 
 
 
 class lyric_finder:
@@ -65,9 +66,9 @@ class lyric_finder:
         __session = requests.Session()
         __request = __session.get(self.URL)
         __soup = BeautifulSoup(__request.content, 'html.parser')
-        __page = __soup.find(class_="lyrics")
+        __page = __soup.find(class_=re.compile("^Lyrics"))
         self.lyrics = __page.text
-        __page = __soup.find(class_="header_with_cover_art-primary_info-title")
+        __page = __soup.find(class_=re.compile("^SongHeader"))
         self.title = __page.text
         
 

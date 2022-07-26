@@ -33,12 +33,12 @@ helpMessage = discord.Embed(
 
 helpMessage.set_footer(text="plz send help I have been on since")
 helpMessage.add_field(
-    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL of an image\n$wiki topic\n$wiki_info topic\n $poll\n$count\n$pokemon igglybuff\n$reaction\n$lyrics")
+    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL of an image\n$wiki topic\n$wiki_info topic\n $poll\n$count\n$pokemon igglybuff\n$reaction\n$lyrics\n$define word\n")
 helpMessage.add_field(name="voice chat commands",
                       value="$say something\n$parler omelette au fromage\n$hablar tengo un gato en mis pantalones\n\
                           $skazat медведь на одноколесном велосипеде\n$dire something italian\n$zip 33016\n$sing song name\n$canta song name")
 helpMessage.add_field(
-    name="Games", value="I wish to cross the bridge of death\nMad Minute\nGame show\ntic-tac-toe\nFermi\n")
+    name="Games", value="I wish to cross the bridge of death\nMad Minute\nGame show\ntic-tac-toe\nFermi\nWord guess\n")
 
 
 @client.event

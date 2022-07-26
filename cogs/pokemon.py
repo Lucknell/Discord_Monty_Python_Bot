@@ -9,7 +9,7 @@ class Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.command(aliases=['pkmn'])
     async def pokemon(self, ctx, *, search=None):
         if not search:
             return await ctx.send("Please give a string to search with")

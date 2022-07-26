@@ -4,6 +4,8 @@ import requests
 import random
 import configparser
 import sys
+import threading
+import asyncio
 sys.path.append("/src/bot/cogs/lucknell/")
 import utils
 
@@ -12,11 +14,11 @@ config = configparser.ConfigParser()
 config.read('/src/bot/config.ini')
 
 class Weather(commands.Cog):
+    threads = []
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def zip(self, ctx, arg=None):
+    async def _zip(self, ctx, arg=None):
         error_cases = ["https://tenor.com/view/family-guy-ollie-williams-its-raining-side-ways-weatherman-weather-gif-5043009",
                     "https://tenor.com/view/rain-its-gon-rain-weather-report-gif-5516318"]
         # await client.user.edit(username=names[random.randint(0, len(names) - 1)])
@@ -54,8 +56,13 @@ It currently feels like {} degrees Fahrenheit. The low and high are {} and {}. T
         else:
             await ctx.send(weather_talk)
         # await client.user.edit(username=Bot_Name)
-    
-    
+
+    @commands.command()
+    async def zip(self, ctx, arg=None):
+        await self._zip(ctx, arg)
+        #x = threading.Thread(target=asyncio.run, args=(self._zip(ctx, arg)), name=ctx.guild.id)
+        #x.start()
+
     def wind_degree(self, int):
         if (int > 345 and int < 361) or (int > -1 and int < 16):
             return "N"

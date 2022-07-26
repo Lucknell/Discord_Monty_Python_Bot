@@ -1,0 +1,39 @@
+from discord.ext import commands
+import discord
+import sys
+import random
+sys.path.append("/src/bot/cogs/lucknell/")
+from yugi import yugioh_finder, ShadowRealmError
+
+class Yugioh(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command(aliases=['yugi'])
+    async def yugioh(self, ctx, *, search=None):
+        #if str(ctx.author.id) != "257122975508070401":
+        #    return await ctx.send("This feature is under testing.")
+        if not search:
+            return await ctx.send("Please give a string to search with")
+        try:
+            yugioh = yugioh_finder(search)
+        except ShadowRealmError:
+            return await ctx.send("No results found")
+        embed = discord.Embed()
+        if yugioh.picture:
+            embed.set_image(url=yugioh.picture)
+        embed.set_author(name=yugioh.heading)
+        #embed.add_field(name="Type", value=yugioh.type)
+        embed.add_field(name="Description", value=yugioh.description)
+        if yugioh.isACard and yugioh.card_type == "Monster":
+            embed.add_field(name="Type", value=yugioh.type)
+            embed.add_field(name="Level", value=yugioh.level)
+            embed.add_field(name="ATK/DEF", value=yugioh.stats)    
+        embed.add_field(name="URL", value=yugioh.URL)
+        try:
+            await ctx.send(embed=embed)
+        except discord.errors.HTTPException:
+            await ctx.send("Your search results were sent to the Shadow Realm")
+
+def setup(bot):
+    bot.add_cog(Yugioh(bot))

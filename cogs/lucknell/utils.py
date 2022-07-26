@@ -7,6 +7,7 @@ import random
 import re
 
 queue = {}
+connected = {}
 
 
 class SpeechQ:
@@ -24,14 +25,16 @@ async def TTStime(ctx, speak, lang, client, say=None, rate=None, name=""):
         speech = await join(temp, speak)
     else:
         speech = say
+    connection = None
     v_channel = ctx.message.author.voice
+    if len(speech) < 6:
+        return await ctx.send("too little to speak make your phrase longer")
     if v_channel:
         if ctx.message.author.voice.self_deaf or ctx.message.author.voice.deaf:
             return await ctx.message.channel.send("you aren't going to listen to me anyways")
         serverQueue = queue.get(ctx.message.guild.id)
         millis = int(round(time.time() * 1000))
         # no name conflicts should be possible
-        # await ctx.message.delete()
         file = "voice" + str(millis) + \
             str(ctx.message.author.id) + name + ".mp3"
         if not rate:
@@ -50,13 +53,15 @@ async def TTStime(ctx, speak, lang, client, say=None, rate=None, name=""):
                 serverQueue = SpeechQ(ctx.message.channel, [
                                       (speech, file, rate, lang)], connection, 1)
                 queue.update({ctx.message.guild.id: serverQueue})
+                connected.update({ctx.message.guild.id: connection})
             play_next(ctx.message.guild, client)
         except discord.errors.ClientException:
-            return
+            return await connection.disconnect(force=True)
         except Exception as e:
             print(e)
             print("Exception?")
-            await connection.disconnect(force=True)
+            if connection:
+                await connection.disconnect(force=True)
     else:
         await ctx.message.channel.send("you are not in a voice channel")
 
@@ -69,6 +74,15 @@ def play_next(guild, client):
     if len(serverQueue.speeches) == 0:
         queue.pop(guild.id)
         future = asyncio.run_coroutine_threadsafe(
+            asyncio.sleep(120), client.loop)
+        try:
+            future.result(timeout=121)
+        except asyncio.TimeoutError:
+            print('The coroutine took too long, cancelling the task...')
+        q = queue.get(guild.id)
+        if q:
+            return
+        future = asyncio.run_coroutine_threadsafe(
             serverQueue.connection.disconnect(), client.loop)
         try:
             future.result(timeout=60)
@@ -79,7 +93,14 @@ def play_next(guild, client):
         tupleQ = serverQueue.speeches.pop(0)
         create_voice(tupleQ)
         # the mp3 file is not ready right away
-        time.sleep(len(tupleQ[0]) * .005)
+        time.sleep(len(tupleQ[0]) * .007)
+        if not os.path.isfile(tupleQ[1]):
+            future = asyncio.run_coroutine_threadsafe(
+                serverQueue.textCh.send("An error occurred. Sorry about that"))
+            try:
+                future.result(timeout=30)
+            except asyncio.TimeoutError:
+                print('The coroutine took too long, cancelling the task...')
         serverQueue.connection.play(discord.FFmpegPCMAudio(
             tupleQ[1]), after=lambda x: clean_up(guild, tupleQ[1], client))
     return
@@ -107,11 +128,12 @@ def create_voice(tupleQ):
 
 async def dc(ctx):
     if ctx.message.author.voice.channel:
-        serverQueue = queue.get(ctx.message.guild.id)
-        if serverQueue == None:
+        connection = connected.get(ctx.message.guild.id)
+        if connection == None:
             return
-        await serverQueue.connection.disconnect()
+        await connection.disconnect()
         queue.pop(ctx.message.guild.id)
+        connected.pop(ctx.message.guild.id)
 
 
 async def skip(ctx):
@@ -167,7 +189,7 @@ def check(author):
 def KtoF(value):
     return ((value - 273.15)*1.8 + 32)
 
-    
+
 def decodeHTMLSymbols(str):
     str = str.replace("&Agrave;", "À").replace("&Aacute;", "Á").replace("&Acirc;", "Â").replace(
         "&Atilde;", "Ã").replace("&Auml;", "Ä").replace("&Aring;", "Å").replace("&agrave;", "à")

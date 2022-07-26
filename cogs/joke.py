@@ -10,12 +10,12 @@ class Joke(commands.Cog):
         self.bot = bot
 
     @commands.command()
-    async def joke(self, ctx):
+    async def joke(self, ctx, *, flag=None):
         headers = {"Accept": "application/json"}
         url = "https://icanhazdadjoke.com/"
         joke_data = requests.get(url, headers=headers).json()
         await ctx.send(joke_data["joke"])
-        if ctx.message.author.voice:
+        if ctx.message.author.voice and flag == None:
             await utils.TTStime(ctx, "", 17, self.bot, joke_data["joke"])
 
 
