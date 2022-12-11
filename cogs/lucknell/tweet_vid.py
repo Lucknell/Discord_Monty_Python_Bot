@@ -21,8 +21,8 @@ class tweet_vid:
         geckodriver_autoinstaller.install()
         __driver = webdriver.Firefox(options=__options)
         __driver.get(__URL)
-        __driver.find_element_by_class_name("input-group-field").send_keys(URL)
-        __driver.find_element_by_class_name("button").click()
+        __driver.find_element(By.CLASS_NAME, "input-group-field").send_keys(URL)
+        __driver.find_element(By.CLASS_NAME, "button").click()
         __error = None
         try:
             #wait until the page is fully loaded and the mini card is ready

@@ -57,11 +57,9 @@ It currently feels like {} degrees Fahrenheit. The low and high are {} and {}. T
             await ctx.send(weather_talk)
         # await client.user.edit(username=Bot_Name)
 
-    @commands.command()
-    async def zip(self, ctx, arg=None):
-        await self._zip(ctx, arg)
-        #x = threading.Thread(target=asyncio.run, args=(self._zip(ctx, arg)), name=ctx.guild.id)
-        #x.start()
+    @commands.hybrid_command(name = "weather", with_app_command = True, description ="Get the weather for your zip code")
+    async def zip(self, ctx: commands.Context, zip: str):
+        await self._zip(ctx, zip)
 
     def wind_degree(self, int):
         if (int > 345 and int < 361) or (int > -1 and int < 16):
@@ -99,5 +97,5 @@ It currently feels like {} degrees Fahrenheit. The low and high are {} and {}. T
         else:
             return "You really shouldn't be seeing this..."
 
-def setup(bot):
-    bot.add_cog(Weather(bot))
+async def setup(bot):
+    await bot.add_cog(Weather(bot))

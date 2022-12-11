@@ -3,16 +3,69 @@ import discord
 import configparser
 import logging
 from datetime import datetime
-from discord.ext import commands
-from discord.ext import tasks
+from discord.utils import find
+from discord.ext import commands, ipc
+from discord import app_commands
+import asyncio
+from pymongo import MongoClient
+import requests
 
 Bot_Name = "Monty Python"
+prefix = "$"
+intents = discord.Intents.default()
+intents.message_content = True
 
-client = commands.Bot(command_prefix=commands.when_mentioned_or('$'))
-client.remove_command('help')  # remove the default help message
+class Bot(commands.Bot):
+    def __init__(self,  *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ipc_server = ipc.Server(self, secret_key="theholygrail", host="0.0.0.0", port=8765)
+
+
+    async def setup_hook(self):
+        filepath = "/src/bot/down/"
+        if os.path.exists(filepath):
+            files = os.listdir(filepath)
+            for f in files:
+                os.remove(filepath+f)
+            os.rmdir(filepath)
+        files = os.listdir("/src/bot/cogs/")
+        for f in files:
+            if f.endswith(".py"):
+                await self.load_extension("cogs." + f.replace(".py", ""))
+                print(f)
+        await self.tree.sync()
+        print(f"Synced Slash commands for {self.user}.")
+
+    async def on_ipc_ready(self):
+        print("I just wanna talk")
+
+    async def on_ready(self):
+        #search for jobs that were added before the reboot
+        mclient = MongoClient("mongodb://192.168.1.107:27017/")
+        jobs = mclient.Monty.downloader.find({"state":"new"})
+        guilds = []
+        new_jobs = False
+        for job in jobs:
+            new_jobs = True
+            guilds.append (job["server"])
+        set_guilds = set(guilds)
+        if not new_jobs:
+            print("No pending jobs")
+        for guild in set_guilds:
+            print(guild)
+            x = requests.get("http://192.168.1.107:5101/checkjobs/" + guild)
+
+    async def on_command_error(self, ctx, error):
+        await ctx.reply(error, ephemeral = True)
+
+client = Bot(command_prefix = prefix, intents = intents)
 
 config = configparser.ConfigParser()
 config.read('config.ini')
+
+@client.hybrid_command(name = "test", with_app_command = True, description = "Hope that this works ")
+async def test(ctx: commands.Context):
+    await ctx.reply("It did not.")
 
 avatar_path = "/src/bot/avatar.png"
 fp = open(avatar_path, 'rb')
@@ -25,39 +78,65 @@ handler.setFormatter(logging.Formatter(
     "{asctime}: {levelname}: {name}: {message}", style="{"))
 logger.addHandler(handler)
 
-helpMessage = discord.Embed(
-    title="Help message and the quest for the holy grail",
-    color=discord.Color(0xff94aa),
-    timestamp=datetime.now()
-)
+@client.ipc_server.route()
+async def post_jobs(data):
+    #IPC cannot send data over. we will have to check for the ready state in the table.
+    mclient = MongoClient("mongodb://192.168.1.107:27017/")
+    for i in mclient.Monty.downloader.find({"state":"Ready!"}):
+        URL = i["URL"]
+        user = i["user_id"]
+        message = i["message"]
+        msg_id = i["message_id"]
+        guild = discord.utils.get(client.guilds, id=int(i["server"]))
+        channel = discord.utils.get(guild.channels, id=int(i["channel"]))
+        filepath = "/src/bot/down/"+str(i["file"])
 
-helpMessage.set_footer(text="plz send help I have been on since")
-helpMessage.add_field(
-    name="commands", value="$dc\n$status\n$game\n$joke\n$fact\n$totext URL of an image\n$wiki topic\n$wiki_info topic\n $poll\n$count\n$pokemon igglybuff\n$reaction\n$lyrics\n$define word\n")
-helpMessage.add_field(name="voice chat commands",
-                      value="$say something\n$parler omelette au fromage\n$hablar tengo un gato en mis pantalones\n\
-                          $skazat медведь на одноколесном велосипеде\n$dire something italian\n$zip 33016\n$sing song name\n$canta song name")
-helpMessage.add_field(
-    name="Games", value="I wish to cross the bridge of death\nMad Minute\nGame show\ntic-tac-toe\nFermi\nWord guess\n")
+        if not os.path.exists(filepath):
+            print("file not found starting the process again")
+            update = {"$set": {"state":"new"}}
+            mclient.Monty.downloader.update_one(i, update)
+            x = requests.get("http://192.168.1.107:5101/checkjobs/"+str(i["server"]))
+            continue
 
+        if ((os.path.getsize(filepath)/(1024*1024)) <= 8):
+            msg = await channel.fetch_message(msg_id)
+            await msg.edit(content =f"Original url is {URL}\n{message}")
+            await channel.send(file=discord.File(filepath))
+            os.remove(filepath)
+        elif ((os.path.getsize(filepath)/(1024*1024)) > 8):
+            await channel.send(f"I am sorry <@{user}> that file is getting deleted because it is too large for me to send on discord.\n here is your URL: {URL}")
+            os.remove(filepath)
+        mclient.Monty.downloader.delete_one(i)
+    return "something cool"
 
-@client.event
-async def on_ready():
-    print('And the holy grail')
-    try:
-        await client.user.edit(avatar=avatar)
-    except discord.errors.HTTPException:
-        pass
-    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="The Holy Grail"))
+@client.ipc_server.route()
+async def get_guild_count(data):
+    return len(client.guilds)
 
+@client.ipc_server.route()
+async def get_guild_ids(data):
+    final = []
+    for guild in client.guilds:
+        final.append(guild.id)
+    return final
 
-@client.command()
-async def help(ctx):
-    await ctx.send(embed=helpMessage)
+@client.ipc_server.route()
+async def get_guild(data):
+    guild = client.get_guild(data.guild_id)
+    if guild is None: return None
 
-files = os.listdir("/src/bot/cogs/")
-for f in files:
-    if f.endswith(".py"):
-        client.load_extension("cogs." + f.replace(".py", ""))
+    guild_data = {
+        "name": guild.name,
+        "id": guild.id,
+        "prefix": "$"
+    }
 
-client.run(config['bot-token']['token'])
+    return guild_data
+
+async def main():
+    async with client:
+        await client.ipc_server.start()
+        print("Starting bot")
+        await client.start(os.getenv('TOKEN'))
+
+asyncio.run(main())

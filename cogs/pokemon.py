@@ -9,8 +9,8 @@ class Pokemon(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(aliases=['pkmn'])
-    async def pokemon(self, ctx, *, search=None):
+    @commands.hybrid_command(name = "pkmn", with_app_command = True, description ="Get pokemon info")
+    async def pokemon(self, ctx: commands.Context, search: str):
         if not search:
             return await ctx.send("Please give a string to search with")
         try:
@@ -27,5 +27,5 @@ class Pokemon(commands.Cog):
         embed.add_field(name="URL", value=pokemon.URL)
         await ctx.send(embed=embed)
 
-def setup(bot):
-    bot.add_cog(Pokemon(bot))
+async def setup(bot):
+    await bot.add_cog(Pokemon(bot))

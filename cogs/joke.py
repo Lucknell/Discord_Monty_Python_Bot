@@ -9,22 +9,19 @@ class Joke(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def joke(self, ctx, *, flag=None):
+    @commands.hybrid_command(name = "joke", with_app_command = True, description ="try it out and see")
+    async def joke(self, ctx: commands.Context):
         headers = {"Accept": "application/json"}
         url = "https://icanhazdadjoke.com/"
         joke_data = requests.get(url, headers=headers).json()
         await ctx.send(joke_data["joke"])
-        if ctx.message.author.voice and flag == None:
-            await utils.TTStime(ctx, "", 17, self.bot, joke_data["joke"])
 
-
-    @commands.command()
-    async def fact(self, ctx):
+    @commands.hybrid_command(name = "fact", with_app_command = True, description ="These may be true")
+    async def fact(self, ctx: commands.Context):
         headers = {"Accept": "application/json"}
         url = "https://useless-facts.sameerkumar.website/api"
         fact_data = requests.get(url, headers=headers).json()
         await ctx.send(fact_data["data"])
 
-def setup(bot):
-    bot.add_cog(Joke(bot))
+async def setup(bot):
+    await bot.add_cog(Joke(bot))

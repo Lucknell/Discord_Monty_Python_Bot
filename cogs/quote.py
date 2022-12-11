@@ -9,8 +9,8 @@ class Quote(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def quote(self, ctx, category, *, search=None):
+    @commands.hybrid_command(name = "quote", with_app_command = True, description ="\"something like this\" -Monty")
+    async def quote(self, ctx: commands.Context, category, search: str):
         try:
             quote = quote_finder(category, search)
         except QuoteNotFoundError:
@@ -23,5 +23,5 @@ class Quote(commands.Cog):
         else:
             return await ctx.send("{}\n{}".format(quote.quote, quote.quote_URL))
 
-def setup(bot):
-    bot.add_cog(Quote(bot))
+async def setup(bot):
+    await bot.add_cog(Quote(bot))

@@ -8,9 +8,9 @@ class Wiki(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def wiki(self, ctx, *, args):
-        wiki = wikipedia(args)
+    @commands.hybrid_command(name = "wiki", with_app_command = True, description ="Search wikipedia for information")
+    async def wiki(self, ctx: commands.Context, search: str):
+        wiki = wikipedia(search)
         try:
             return await ctx.send("{} \nRead more here: {}".format(wiki.summary, wiki.url))
         except AttributeError:
@@ -20,9 +20,9 @@ class Wiki(commands.Cog):
             return await ctx.send("Read more here: {}".format(wiki.url))
 
 
-    @commands.command()
-    async def wiki_info(self, ctx, *, args):
-        wiki = wikipedia(args)
+    @commands.hybrid_command(name = "wiki_table", with_app_command = True, description ="Search wikipedia for information")
+    async def wiki_info(self, ctx: commands.Context, search: str):
+        wiki = wikipedia(search)
         info_box = ""
         try:
             if not wiki.infobox:
@@ -39,5 +39,5 @@ class Wiki(commands.Cog):
             return await ctx.send("No articles found")
 
 
-def setup(bot):
-    bot.add_cog(Wiki(bot))
+async def setup(bot):
+    await bot.add_cog(Wiki(bot))

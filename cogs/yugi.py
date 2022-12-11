@@ -9,8 +9,8 @@ class Yugioh(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(aliases=['yugi'])
-    async def yugioh(self, ctx, *, search=None):
+    @commands.hybrid_command(name = "yugi", with_app_command = True, description ="It's time to duel")
+    async def yugioh(self, ctx: commands.Context, search: str):
         #if str(ctx.author.id) != "257122975508070401":
         #    return await ctx.send("This feature is under testing.")
         if not search:
@@ -35,5 +35,5 @@ class Yugioh(commands.Cog):
         except discord.errors.HTTPException:
             await ctx.send("Your search results were sent to the Shadow Realm")
 
-def setup(bot):
-    bot.add_cog(Yugioh(bot))
+async def setup(bot):
+    await bot.add_cog(Yugioh(bot))

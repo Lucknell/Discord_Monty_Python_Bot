@@ -18,18 +18,18 @@ class Monty(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.hybrid_command(name = "status", with_app_command = True, description ="Status report number 2")
     async def status(self, ctx):
         statuses = ["Jokes on you we still alive", "I'm fine, get X go", "Systems online awaiting next task",
                     "Damage report returned. No damage found", "You scared ain't ya?"]
         # randInt is inclusive of the upper bound
         return await ctx.send(statuses[random.randint(0, len(statuses) - 1)])
 
-    @commands.command()
-    async def totext(self, ctx, arg=None):
-        if not arg:
+    @commands.hybrid_command(name = "totext", with_app_command = True, description ="convert an image from a URL to text")
+    async def totext(self, ctx: commands.Context, url: str):
+        if not url:
             return await ctx.send("Try that again but give me a URL to an image next time")
-        url = utils.valid_URL(arg)
+        url = utils.valid_URL(url)
         if not url:
             return await ctx.send("invalid URL")
         url = url.string
@@ -46,36 +46,31 @@ class Monty(commands.Cog):
         os.remove(filename)
         await ctx.send(text)
 
-    @commands.command()
-    async def good(self, ctx, arg):
+    @commands.hybrid_command(name = "good", with_app_command = False, description ="Say good bot")
+    async def good(self, ctx: commands.Context, word: str):
         if arg.lower() == "bot":
             await ctx.message.add_reaction("😄")
 
-    @commands.command()
-    async def bad(self, ctx, arg):
+    @commands.hybrid_command(name = "bad", with_app_command = False, description ="Say bad bot")
+    async def bad(self, ctx: commands.Context, word: str):
         if arg.lower() == "bot":
             await ctx.send("alright then.")
 
-    @commands.command()
-    async def about(self, ctx):
+    @commands.hybrid_command(name = "about", with_app_command = True, description ="learn more")
+    async def about(self, ctx: commands.Context):
         return await ctx.send("You can learn more about me here\nhttps://github.com/Lucknell/Discord_Monty_Python_Bot")
 
-    @commands.command(aliases=['poll'])
-    async def vote(self, ctx):
+    @commands.hybrid_command(name = "poll", with_app_command = True, description ="Put something to a vote add the choices with comma separated value")
+    async def vote(self, ctx: commands.Context, poll_question: str, opt: str):
         current = ['0️⃣', '1️⃣', '2️⃣', '3️⃣',
                    '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
-        await ctx.send("What do you want to put to a vote " + ctx.author.mention + "?\nComma separate the items (max 10)")
-        try:
-            msg = await self.bot.wait_for('message', check=utils.check(ctx.author), timeout=60)
-        except asyncio.TimeoutError:
-            return await ctx.send("On this day the vote was canceled before starting.")
-        choices = msg.content.split(",")
+        choices = opt.split(",") 
         if len(choices) < 2:
             return await ctx.send("Not enough choices to make the poll")
         if len(choices) > 10:
             return await ctx.send("Too many choices")
         i = -1
-        s = "Here are the choices react below"
+        s = f"{poll_question}\nHere are the choices react below"
         vote = await ctx.send("loading...")
         for choice in choices:
             i += 1
@@ -85,8 +80,8 @@ class Monty(commands.Cog):
             await vote.add_reaction(emoji)
         await vote.edit(content=s)
 
-    @commands.command()
-    async def count(self, ctx, id=None):
+    @commands.hybrid_command(name = "count", with_app_command = True, description ="This may be broken...")
+    async def count(self, ctx: commands.Context, id: str):
         if not id:
             return
         poll = await ctx.channel.fetch_message(id)
@@ -97,7 +92,7 @@ class Monty(commands.Cog):
         valid_voters = [self.bot.user.id]
 
         count = len(poll.content.split("\n")) - 2
-        options = {x[:3]: x[4:] for x in poll.content.split("\n")[1:count+1]}
+        options = {x[:3]: x[4:] for x in poll.content.split("\n")[2:count+1]}
         tally = {x: 0 for x in current[:count]}
         for reaction in poll.reactions:
             if reaction.emoji in current[:count]:
@@ -112,12 +107,12 @@ class Monty(commands.Cog):
         await ctx.send(results)
         await poll.delete()
 
-    @commands.command()
-    async def reaction(self, ctx, id=None, *, phrases=None):
-        if not id or not phrases:
+    @commands.hybrid_command(name = "react", with_app_command = True, description ="This stuff takes some concentration you know...")
+    async def reaction(self, ctx: commands.Context, message_id: str, phrases: str):
+        if not message_id or not phrases:
             return await ctx.send("I need a message id like {} and a phrase like **uncopyrightable**".format(ctx.message.id))
         try:
-            msg = await ctx.channel.fetch_message(id)
+            msg = await ctx.channel.fetch_message(message_id)
         except discord.errors.NotFound:
             return await ctx.send("invalid id")
         except discord.errors.HTTPException:
@@ -172,55 +167,15 @@ class Monty(commands.Cog):
                 await msg.add_reaction(emojis[letter])
             except KeyError:
                 pass
+        return await ctx.send("Done.")
 
-    @commands.command()
-    async def flip(self, ctx):
+    @commands.hybrid_command(name = "flip", with_app_command = True, description ="flip a coin")
+    async def flip(self, ctx: commands.Context):
         coin = random.randint(0, 1)
         if coin == 1:
             return await ctx.send("Heads")
         else:
-            return await ctx.send("Tails")
+            return await ctx.send("Tails")        
 
-    @commands.command()
-    async def report(self, ctx, word="", user=None):
-        client = self.bot
-        if word.lower() != "card":
-            return
-        if user == None:
-            await ctx.send("For who?")
-            try:
-                msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
-            except asyncio.TimeoutError:
-                msg = None
-            if msg:
-                member = msg.content.split(" ")[0]
-                try:
-                    player = await msg.guild.fetch_member(int(member.replace("<", "").replace(">", "").replace("@", "").replace("!", "")))
-                except discord.errors.NotFound:
-                    player = client.user
-                except discord.errors.HTTPException:
-                    player = client.user
-                except ValueError:
-                    player = client.user
-        else:
-            try:
-                player = await ctx.message.guild.fetch_member(int(user.replace("<", "").replace(">", "").replace("@", "").replace("!", "")))
-            except discord.errors.NotFound:
-                player = client.user
-            except discord.errors.HTTPException:
-                player = client.user
-            except ValueError:
-                player = client.user
-        card = discord.Embed(
-        title="Report card for {} in {}".format(player.display_name, ctx.message.guild.name))
-        card.add_field(name="Math", value="F")
-        card.add_field(name="Reading", value="F")
-        card.add_field(name="English", value="F")
-        card.add_field(name="History", value="F")
-        card.add_field(name="Science", value="F")
-        card.add_field(name="Music", value="F")
-        await ctx.send(embed=card)
-        
-
-def setup(bot):
-    bot.add_cog(Monty(bot))
+async def setup(bot):
+    await bot.add_cog(Monty(bot))
