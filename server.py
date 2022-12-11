@@ -13,8 +13,8 @@ app = Quart(__name__)
 ipc_client = ipc.Client(secret_key = "theholygrail",)
 
 app.secret_key = b"thisisatestofwill"
-app.config["DISCORD_CLIENT_ID"] = 774527385843662858   # Discord client ID.
-app.config["DISCORD_CLIENT_SECRET"] = "futI50L3cASjvklzKyyxRv64qz1qqBDj"   # Discord client secret.
+app.config["DISCORD_CLIENT_ID"] = os.getenv("CLIENT_ID")   # Discord client ID.
+app.config["DISCORD_CLIENT_SECRET"] = os.getenv("SECRET")   # Discord client secret.
 app.config["DISCORD_REDIRECT_URI"] = "http://192.168.1.107:5101/callback"   
 
 discord = DiscordOAuth2Session(app)
