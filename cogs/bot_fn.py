@@ -1,4 +1,4 @@
-import utils
+from cogs.lucknell import utils
 from discord.ext import commands
 import discord
 import sys
@@ -11,7 +11,6 @@ import numpy as np
 from datetime import datetime
 from PIL import Image
 import shutil
-sys.path.append("/src/bot/cogs/lucknell/")
 
 
 class Monty(commands.Cog):
@@ -117,6 +116,7 @@ class Monty(commands.Cog):
             return await ctx.send("invalid id")
         except discord.errors.HTTPException:
             return await ctx.send("invalid id")
+        await ctx.send("Done.", ephemeral = True)
         letters = []
         emojis = {"a": "🇦",
                   "b": "🇧",

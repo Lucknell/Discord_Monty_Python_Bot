@@ -1,84 +1,34 @@
 from discord.ext import commands
 import discord
-import sys
 import random
-sys.path.append("/src/bot/cogs/lucknell/")
-import utils
-from lyrics import lyric_finder, SongNotFoundError
+import cogs.lucknell.utils as utils
+from cogs.lucknell.lyrics import lyric_finder, SongNotFoundError
 
 class Speech(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    async def say(self, ctx):
-        await utils.TTStime(ctx, "say", 17, self.bot)
+    @commands.hybrid_command(name = "say", with_app_command = True, description ="Speak english")
+    async def say(self, ctx, speech):
+        self.bot.loop.create_task(utils.TTStime(ctx, "say", 17, self.bot, speech))
 
+    @commands.hybrid_command(name = "sing", with_app_command = True, description ="I get my American Idol on")
+    async def sing(self, ctx, song_name):
+        self.bot.loop.create_task(self.__sing(ctx, song_name, 17, "genius"))
 
-    @commands.command()
-    async def speak(self, ctx, multipier=None, *, speech=None):
-        if not multipier or not speech:
-            return
-        await utils.TTStime(ctx, "", 10, self.bot, speech, multipier)
-
-
-    @commands.command()
-    async def skazat(self, ctx):
-        await utils.TTStime(ctx, "skazat", 54, self.bot)
-
-
-    @commands.command()
-    async def hablar(self, ctx):
-        await utils.TTStime(ctx, "hablar", 18, self.bot)
-
-
-    @commands.command()
-    async def parler(self, ctx):
-        await utils.TTStime(ctx, "parler", 24, self.bot)
-
-
-    @commands.command()
-    async def dire(self, ctx):
-        await utils.TTStime(ctx, "dire", 34, self.bot)
-
-
-    @commands.command()
-    async def hanasu(self, ctx):
-        await utils.TTStime(ctx, "hanasu", 39, self.bot)
-
-    @commands.command(aliases=['disconnect', 'leave'])
+    @commands.hybrid_command(name = "disconnect", with_app_command = True, description ="Goodbye Tien")
     async def dc(self, ctx):
         await utils.dc(ctx)
 
-    @commands.command()
-    @commands.has_role('Monty\'s keeper')
-    async def skip(self, ctx):
-        await utils.skip(ctx)
-
-    @commands.command()
-    async def sing(self, ctx, *, args):
-        await self.__sing(ctx, args, 17)
-
-
-    @commands.command()
-    async def canta(self, ctx, *, args):
-        await self.__sing(ctx, args, 18)
-
-
-    @commands.command()
-    async def sing_genius(self, ctx, *, args):
-        await self.__sing(ctx, args, 17, "genius")
-
-
     async def __sing(self, ctx, args, lang, provider="azlyrics"):
         # return await ctx.send("This function is disabled")
+        msg = await ctx.send("loading...")
         try:
             song = lyric_finder(args, provider)
         except SongNotFoundError:
             return await ctx.send("Song could not be found")
-        await ctx.send("Sing along here\n{}".format(song.URL))
-        await utils.TTStime(ctx, "", lang, self.bot, song.lyrics[0:850], name=str(random.randint(0, 10000)))
+        await msg.edit(content="Sing along here\n{}".format(song.URL))
+        await utils.TTStime(ctx, "", lang, self.bot, song.lyrics[0:600], name=str(random.randint(0, 10000)))
 
-
-def setup(bot):
-    bot.add_cog(Speech(bot))
+async def setup(bot):
+    await bot.add_cog(Speech(bot))

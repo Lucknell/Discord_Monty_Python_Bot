@@ -9,6 +9,7 @@ from discord import app_commands
 import asyncio
 from pymongo import MongoClient
 import requests
+import time
 
 Bot_Name = "Monty Python"
 prefix = "$"
@@ -19,7 +20,6 @@ class Bot(commands.Bot):
     def __init__(self,  *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ipc_server = ipc.Server(self, secret_key="theholygrail", host="0.0.0.0", port=8765)
-
 
     async def setup_hook(self):
         filepath = "/src/bot/down/"
@@ -38,13 +38,23 @@ class Bot(commands.Bot):
 
     async def on_ipc_ready(self):
         print("I just wanna talk")
-
+        
+    async def on_ipc_error(self, endpoint, error):
+        """Called upon an error being raised within an IPC route"""
+        print(endpoint, "raised", error)
+        
     async def on_ready(self):
         #search for jobs that were added before the reboot
         mclient = MongoClient("mongodb://192.168.1.107:27017/")
-        jobs = mclient.Monty.downloader.find({"state":"new"})
+        jobs = mclient.Monty.downloader.find({"state":"Failed to download"})
+        for job in jobs:
+            await self.process_failed_jobs(job, mclient)
+        jobs = mclient.Monty.downloader.find({"state":"Ready!"})
+        for job in jobs:
+            await self.process_unposted_jobs(job, mclient)
         guilds = []
         new_jobs = False
+        jobs = mclient.Monty.downloader.find({"state":"new"})
         for job in jobs:
             new_jobs = True
             guilds.append (job["server"])
@@ -53,10 +63,38 @@ class Bot(commands.Bot):
             print("No pending jobs")
         for guild in set_guilds:
             print(guild)
-            x = requests.get("http://192.168.1.107:5101/checkjobs/" + guild)
+            x = requests.get("http://192.168.1.107:5101/checkjobs/" + str(guild))
+            print (x)
 
     async def on_command_error(self, ctx, error):
-        await ctx.reply(error, ephemeral = True)
+        if ctx.interaction:
+            await ctx.reply(error, ephemeral = True)
+    
+    async def process_failed_jobs(self, job, mclient):
+            URL = job["URL"]
+            user = job["user_id"]
+            message = job["message"]
+            msg_id = job["message_id"]
+            guild = discord.utils.get(client.guilds, id=int(job["server"]))
+            channel = discord.utils.get(guild.channels, id=int(job["channel"]))
+            msg = await channel.fetch_message(msg_id)
+            await msg.edit(content =f"Original url: {URL}\nFailed to download")
+            mclient.Monty.downloader.delete_one(job)
+
+    async def process_unposted_jobs(self, job, mclient):
+            URL = job["URL"]
+            user = job["user_id"]
+            message = job["message"]
+            msg_id = job["message_id"]
+            guild = discord.utils.get(client.guilds, id=int(job["server"]))
+            channel = discord.utils.get(guild.channels, id=int(job["channel"]))
+            filepath = "/src/bot/down/"+str(job["file"])
+
+            if not os.path.exists(filepath):
+                print("file not found starting the process again")
+                update = {"$set": {"state":"new"}}
+                mclient.Monty.downloader.update_one(job, update)
+                x = requests.get("http://192.168.1.107:5101/checkjobs/"+str(job["server"]))
 
 client = Bot(command_prefix = prefix, intents = intents)
 
@@ -82,6 +120,7 @@ logger.addHandler(handler)
 async def post_jobs(data):
     #IPC cannot send data over. we will have to check for the ready state in the table.
     mclient = MongoClient("mongodb://192.168.1.107:27017/")
+    path ="/src/bot/down/"
     for i in mclient.Monty.downloader.find({"state":"Ready!"}):
         URL = i["URL"]
         user = i["user_id"]
@@ -89,24 +128,57 @@ async def post_jobs(data):
         msg_id = i["message_id"]
         guild = discord.utils.get(client.guilds, id=int(i["server"]))
         channel = discord.utils.get(guild.channels, id=int(i["channel"]))
-        filepath = "/src/bot/down/"+str(i["file"])
+        if i["pictures"]:
+            try:
+                msg = await channel.fetch_message(msg_id)
+            except Exception as e:
+                print (e)
+                mclient.Monty.downloader.delete_one(i)
+                continue
+            await msg.edit(content =f"Original url: {URL}\n{message}")
+            for file in i["file"]:
+                if not file.endswith(".jpg"):
+                    continue
+                await channel.send(file=discord.File(path+file))
+                os.remove(path+file)
+            mclient.Monty.downloader.delete_one(i)
+            continue
+        filepath = str(i["file"])
+        if not path in filepath:
+            filepath = path+str(i["file"])
 
         if not os.path.exists(filepath):
-            print("file not found starting the process again")
+            print(f"{filepath} file not found starting the process again")
             update = {"$set": {"state":"new"}}
             mclient.Monty.downloader.update_one(i, update)
             x = requests.get("http://192.168.1.107:5101/checkjobs/"+str(i["server"]))
             continue
 
         if ((os.path.getsize(filepath)/(1024*1024)) <= 8):
-            msg = await channel.fetch_message(msg_id)
-            await msg.edit(content =f"Original url is {URL}\n{message}")
+            try:
+                msg = await channel.fetch_message(msg_id)
+            except Exception as e:
+                print (e)
+                os.remove(filepath)
+                mclient.Monty.downloader.delete_one(i)
+                continue
+            await msg.edit(content =f"Original url: {URL}\n{message}")
             await channel.send(file=discord.File(filepath))
             os.remove(filepath)
         elif ((os.path.getsize(filepath)/(1024*1024)) > 8):
             await channel.send(f"I am sorry <@{user}> that file is getting deleted because it is too large for me to send on discord.\n here is your URL: {URL}")
             os.remove(filepath)
         mclient.Monty.downloader.delete_one(i)
+    for i in mclient.Monty.downloader.find({"state":"Failed to download"}):
+        await client.process_failed_jobs(i, mclient)
+    jobs = False
+    for i in mclient.Monty.downloader.find():
+        jobs = True
+    if not jobs:
+        files = os.listdir(path)
+        for f in files:
+            os.remove(path + f)
+            print(f"deleting {f}")
     return "something cool"
 
 @client.ipc_server.route()

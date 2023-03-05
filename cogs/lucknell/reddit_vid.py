@@ -37,7 +37,7 @@ class reddit_vid:
         except TimeoutException:
             raise RedditDownloadFailedError("Song not found or input error")
         self.URL = __driver.find_elements(By.XPATH, "//*[@class='btn btn-success btn-lg downloadButton']")[0].get_attribute("href")
-        __driver.set_page_load_timeout(60)
+        __driver.set_page_load_timeout(5)
         try:
             __driver.get(self.URL)
         except TimeoutException:
@@ -46,12 +46,16 @@ class reddit_vid:
         print(files)
         start = time.time()
         diff = 0
-        while ".part" in files and diff < 120:
+        while any(".part" in f for f in files) and diff < 240:
             time.sleep(.1)
             print(files)
             print(f"checking for file {diff}")
             diff = time.time() - start
             files = os.listdir(path)
+        print(f"Timer was {diff}")
+        if diff >= 240:
+            __driver.quit()
+            raise RedditDownloadFailedError("Timeout Reached")
         __driver.close()
 
 

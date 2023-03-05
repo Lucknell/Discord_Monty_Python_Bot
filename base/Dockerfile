@@ -6,4 +6,4 @@ RUN apt update && apt upgrade -y && DEBIAN_FRONTEND=noninteractive apt install -
 WORKDIR /src/bot
 RUN git clone https://github.com/Rapptz/discord.py
 RUN cd discord.py && python3 -m pip install -U .[voice]
-RUN pip3 install -U quart Quart-Discord discord.py-ipc Pillow pyttsx3 PyNaCl requests pytesseract numpy beautifulsoup4 geckodriver-autoinstaller selenium emoji PyMongo
+RUN pip3 install -U quart Quart-Discord discord.py-ipc opencv-python Pillow PyNaCl requests pytesseract numpy beautifulsoup4 geckodriver-autoinstaller selenium emoji PyMongo ffmpeg-python yt-dlp wget rlvoice

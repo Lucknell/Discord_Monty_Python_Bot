@@ -43,7 +43,7 @@ class tik_vid:
         __button = __driver.find_element(By.XPATH, "//*[starts-with(@class, 'btn btn-main active mb-2')]")
         #__button = __driver.find_element_by_class_name("abutton is-success is-fullwidth")
         self.URL = __button.get_attribute("href")
-        __driver.set_page_load_timeout(60)
+        __driver.set_page_load_timeout(5)
         try:
             __driver.get(self.URL)
         except TimeoutException:
@@ -52,12 +52,16 @@ class tik_vid:
         print(files)
         start = time.time()
         diff = 0
-        while ".part" in files and diff < 120:
+        while any(".part" in f for f in files) and diff < 240:
             time.sleep(.1)
             print(files)
             print(f"checking for file {diff}")
             diff = time.time() - start
             files = os.listdir(path)
+        print(f"Timer was {diff}")
+        if diff >= 240:
+            __driver.quit()
+            raise TikTokDownloadFailedError("Timeout Reached")
         __driver.close()
 
 

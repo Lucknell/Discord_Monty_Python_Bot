@@ -46,7 +46,7 @@ class insta_vid:
         __button = __driver.find_element(By.XPATH, "//*[starts-with(@class, 'abutton is-success')]")
         __URL = __button.get_attribute("href")
         print(__URL)
-        __driver.set_page_load_timeout(60)
+        __driver.set_page_load_timeout(5)
         try:
             __driver.get(__URL)
         except TimeoutException:
@@ -55,12 +55,15 @@ class insta_vid:
         print(files)
         start = time.time()
         diff = 0
-        while ".part" in files and diff < 120:
+        while any(".part" in f for f in files) and diff < 240:
             time.sleep(.1)
             print(files)
             print(f"checking for file {diff}")
             diff = time.time() - start
             files = os.listdir(path)
+        if diff >= 240:
+            __driver.quit()
+            raise InstaDownloadFailedError("Timeout Reached")
         __driver.close()
 
 

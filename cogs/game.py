@@ -49,27 +49,8 @@ class Game(commands.Cog):
         else:
             return await ctx.send("You what? Get some /help")
 
-    @commands.hybrid_command(name = "leaderboard", with_app_command = True, description ="Lol this isn't as supported anymore")
-    async def leaderboard(self, ctx):
-        try:
-            ctx.message.guild.id
-        except AttributeError:
-            return await ctx.send("This is not a server that can have a leaderboard sorry.")
-        server_file = "config/{}.json".format(str(ctx.message.guild.id))
-        if not os.path.isfile(server_file):
-            return await ctx.send("No leaderboard found for {}".format(ctx.message.guild.name))
-        with open(server_file, "r") as f:
-            lb = json.load(f)
-        board = discord.Embed(
-            title="Leaderboard for {}".format(ctx.message.guild.name))
-        for game_key in lb:
-            board.add_field(name="Game", value=game_key)
-            for index in lb[game_key]:
-                for user in index:
-                    board.add_field(name=user, value=index[user])
-        await ctx.send(embed=board)
 
-    @commands.command(aliases=['lb'])
+    @commands.hybrid_command(name = "leaderboard", with_app_command = True, description ="Lol this isn't as supported anymore")
     async def leaderboard(self, ctx):
         try:
             ctx.message.guild.id

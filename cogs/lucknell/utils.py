@@ -1,6 +1,6 @@
 import os
 import discord
-import pyttsx3
+import rlvoice
 import time
 import asyncio
 import random
@@ -19,6 +19,7 @@ class SpeechQ:
 
 
 async def TTStime(ctx, speak, lang, client, say=None, rate=None, name=""):
+    await ctx.send("Attempting...", ephemeral = True)
     if not say:
         temp = ctx.message.content.lower().split(speak)
         temp = await shift(temp)
@@ -116,7 +117,7 @@ def clean_up(guild, file, client):
 
 
 def create_voice(tupleQ):
-    engine = pyttsx3.init()
+    engine = rlvoice.init()
     engine.setProperty('rate', tupleQ[2])
     voices = engine.getProperty('voices')
     voice = voices[tupleQ[3]]
@@ -127,13 +128,16 @@ def create_voice(tupleQ):
 
 
 async def dc(ctx):
-    if ctx.message.author.voice.channel:
+    if ctx.message.author.voice and ctx.message.author.voice.channel:
         connection = connected.get(ctx.message.guild.id)
         if connection == None:
-            return
+            return await ctx.send("Not connected")
         await connection.disconnect()
+        await ctx.send("That's all folks!")
         queue.pop(ctx.message.guild.id)
         connected.pop(ctx.message.guild.id)
+    else:
+        await ctx.send("You are not in a voice channel")
 
 
 async def skip(ctx):

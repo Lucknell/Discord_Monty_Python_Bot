@@ -55,23 +55,22 @@ class lyric_finder:
         except TimeoutException:
             raise SongNotFoundError("Song not found or input error")
 
-        __mini_cards = __driver.find_elements_by_class_name("mini_card")
+        __mini_cards = __driver.find_elements(By.CLASS_NAME, "mini_card")
         try:
             self.URL = __mini_cards[1].get_attribute("href")
         except IndexError:
             __driver.quit()
             raise SongNotFoundError("Song not found or input error")
-        # __driver.quit()
-        __driver.close()
-        __session = requests.Session()
-        __request = __session.get(self.URL)
-        __soup = BeautifulSoup(__request.content, 'html.parser')
-        __page = __soup.find(class_=re.compile("^Lyrics"))
-        self.lyrics = __page.text
-        __page = __soup.find(class_=re.compile("^SongHeader"))
-        self.title = __page.text
-        
-
+        __driver.get(self.URL)
+        try:
+            #wait until the page is fully loaded and the mini card is ready
+            __element_present = EC.presence_of_element_located((By.XPATH, "//span[starts-with(@class, 'SongHeaderdesktop')]"))
+            WebDriverWait(__driver, 5).until(__element_present)   
+        except TimeoutException:
+            raise SongNotFoundError("Song not found or input error")
+        self.title = __driver.find_element(By.XPATH, "//span[starts-with(@class, 'SongHeaderdesktop')]").text
+        self.lyrics = __driver.find_element(By.XPATH, "//div[starts-with(@class, 'Lyrics__Container')]").text
+        self.author = __driver.find_element(By.XPATH, "//a[starts-with(@href, 'https://genius.com/artists/')]").text
 
 class SongNotFoundError(Exception):
     """Error thrown when song is not found"""
