@@ -22,7 +22,7 @@ class Urban(commands.Cog):
         embed.add_field(name=definition.title[0:256], value="‎‎")
         embed.add_field(name="Definition", value=definition.definition)
         embed.add_field(name="Example", value=definition.example)
-        embed.set_footer(text="Found for " + ctx.author.name, icon_url=ctx.author.avatar_url)
+        embed.set_footer(text="Found for " + ctx.author.name, icon_url=ctx.author.display_avatar.url)
 
         return await ctx.send(embed=embed)
 

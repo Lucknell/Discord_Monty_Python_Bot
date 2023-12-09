@@ -1,9 +1,14 @@
-FROM ubuntu:latest
+FROM archlinux:latest
 MAINTAINER lucknell <lucknell3@gmail.com>
 ENV TZ "America/Los_Angeles"
-RUN mkdir -p /src/bot/
-RUN apt update && apt upgrade -y && DEBIAN_FRONTEND=noninteractive apt install -y python3 python3-pip python-pil ffmpeg espeak-ng libespeak1 tesseract-ocr libjpeg-dev zlib1g-dev libffi-dev firefox git gnupg wget
+RUN pacman -Syu --noconfirm && pacman -S --noconfirm base-devel firefox python python-pip ffmpeg tesseract tesseract-data-eng libjpeg-turbo zlib libffi git gnupg wget curl espeak-ng gcc
+RUN mkdir -p /src/bot/ && mkdir -p /home/monty
+RUN useradd -m -G wheel -s /bin/bash monty
+RUN sed -Ei 's/^#\ (%wheel.*NOPASSWD.*)/\1/' /etc/sudoers
+RUN chown monty:monty /src/bot/ && chown monty:monty /home/monty
+COPY --chown=monty:monty requirements.txt /src/bot/.
+USER monty
 WORKDIR /src/bot
-RUN git clone https://github.com/Rapptz/discord.py
-RUN cd discord.py && python3 -m pip install -U .[voice]
-RUN pip3 install -U quart Quart-Discord discord.py-ipc opencv-python Pillow PyNaCl requests pytesseract numpy beautifulsoup4 geckodriver-autoinstaller selenium emoji PyMongo ffmpeg-python yt-dlp wget rlvoice
+RUN git clone https://github.com/Rapptz/discord.py && cd discord.py && python3 -m pip install  --break-system-packages -U .[voice]
+RUN pip3 install  --break-system-packages -r requirements.txt
+RUN python3 -m spacy download en_core_web_sm --break-system-packages

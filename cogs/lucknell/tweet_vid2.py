@@ -33,7 +33,10 @@ class tweet_vid2:
         #except TimeoutException:
         #    raise TweetDownloadFailedError("Song not found or input error")
         tweets = __driver.find_elements(By.XPATH, "//article")
-        photos = tweets[0].find_elements(By.XPATH, "//img[starts-with(@src, 'https://pbs.twimg.com/media/')]")
+        try:
+            photos = tweets[0].find_elements(By.XPATH, "//img[starts-with(@src, 'https://pbs.twimg.com/media/')]")
+        except IndexError:
+            photos = []
         if len(photos) == 0:
             raise Tweet2DownloadFailedError("No content found")
         self.has_photo = True

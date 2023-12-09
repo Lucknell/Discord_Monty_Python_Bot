@@ -38,12 +38,12 @@ class insta_vid:
         try:
             #wait until the page has the download button
             #WebDriverWait(__driver, 80).until(EC.element_to_be_clickable((By.XPATH, "//*[starts-with(@class, 'abutton is-success')]")))
-            __element_present = EC.presence_of_element_located((By.XPATH, "//*[starts-with(@class, 'abutton is-success')]"))
-            WebDriverWait(__driver, 80).until(__element_present)
+            __element_present = EC.presence_of_element_located((By.XPATH, "//*[starts-with(@class, 'btn download-media')]"))
+            WebDriverWait(__driver, 60).until(__element_present)
         except TimeoutException:
             __driver.close()
             raise InstaDownloadFailedError("Song not found or input error")
-        __button = __driver.find_element(By.XPATH, "//*[starts-with(@class, 'abutton is-success')]")
+        __button = __driver.find_element(By.XPATH, "//*[starts-with(@class, 'btn download-media')]")
         __URL = __button.get_attribute("href")
         print(__URL)
         __driver.set_page_load_timeout(5)
@@ -62,8 +62,8 @@ class insta_vid:
             diff = time.time() - start
             files = os.listdir(path)
         if diff >= 240:
-            __driver.quit()
             raise InstaDownloadFailedError("Timeout Reached")
+            __driver.close()
         __driver.close()
 
 

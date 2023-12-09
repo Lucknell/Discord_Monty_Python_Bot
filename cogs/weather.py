@@ -52,7 +52,7 @@ It currently feels like {} degrees Fahrenheit. The low and high are {} and {}. T
                                         weather_data["weather"][0]["description"], temp, feels_like, temp_min, temp_max,
                                         humidity, wind_speed, wind_dir, (ctx.message.author.nick if ctx.message.author.nick != None else ctx.message.author.name))
         if ctx.message.author.voice:
-            await utils.TTStime(ctx, "", 14,self.bot, say=weather_talk, rate=125)
+            await utils.create_voice_and_play(ctx, weather_talk, "en_US/cmu-arctic_low", self.bot)
         else:
             await ctx.send(weather_talk)
         # await client.user.edit(username=Bot_Name)
@@ -60,6 +60,8 @@ It currently feels like {} degrees Fahrenheit. The low and high are {} and {}. T
     @commands.hybrid_command(name = "weather", with_app_command = True, description ="Get the weather for your zip code")
     async def zip(self, ctx: commands.Context, zip: str):
         await self._zip(ctx, zip)
+        #x = threading.Thread(target=asyncio.run, args=(self._zip(ctx, arg)), name=ctx.guild.id)
+        #x.start()
 
     def wind_degree(self, int):
         if (int > 345 and int < 361) or (int > -1 and int < 16):

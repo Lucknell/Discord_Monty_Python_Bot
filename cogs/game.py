@@ -1,6 +1,6 @@
 
 from Fermi import Fermi
-import utils
+import cogs.lucknell.utils as utils
 from discord.ext import commands
 import discord
 import sys
@@ -11,7 +11,8 @@ import asyncio
 from datetime import datetime
 import os
 import json
-sys.path.append("/src/bot/cogs/lucknell/")
+from typing import Literal
+from cogs.lucknell.GameShow import GameShow
 
 
 class Game(commands.Cog):
@@ -25,7 +26,7 @@ class Game(commands.Cog):
             self.quitting = quitting
 
     @commands.hybrid_command(name = "game", with_app_command = True, description ="This is for sure broken...")
-    async def game(self, ctx: commands.Context, game: str=""):
+    async def game(self, ctx: commands.Context, game: Literal['Fermi', 'Tic Tac Toe', 'Game Show', 'Mad Minute', 'Word guess' ,'I wish to cross the bridge of death']):
         client = self.bot
         msg = ctx.message
         if not game:
@@ -48,7 +49,6 @@ class Game(commands.Cog):
             await self.guess(ctx)
         else:
             return await ctx.send("You what? Get some /help")
-
 
     @commands.hybrid_command(name = "leaderboard", with_app_command = True, description ="Lol this isn't as supported anymore")
     async def leaderboard(self, ctx):
@@ -290,16 +290,17 @@ class Game(commands.Cog):
         except asyncio.TimeoutError:
             return await ctx.send("Nothing? Got it.")
         win = f.check_win(msg.content)
+        answers = msg.content + " " + win +"\n"
         await ctx.send(win)
         rounds -= 1
         while (rounds > 0 and win != winning) and msg.content.lower() != "quit":
-            await ctx.send(ctx.author.display_name + "\nWhat is your next guess? (Guesses remaining {})".format(rounds))
+            await ctx.send(ctx.author.display_name + "\nGuesses:\n" + answers +"\nWhat is your next guess? (Guesses remaining {})".format(rounds))
             try:
                 msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
             except asyncio.TimeoutError:
                 return await ctx.send("Nothing? Got it. The answer was {}".format(f.get_cheats()))
             win = f.check_win(msg.content)
-            await ctx.send(win)
+            answers += msg.content + " " + win +"\n"
             rounds -= 1
         if msg.content.lower() == "quit":
             return await ctx.send("~~You did your best~~ You gave up. The answer was {}".format(f.get_cheats()))
@@ -308,167 +309,13 @@ class Game(commands.Cog):
         else:
             return await ctx.send("There is always next time. The answer was {}".format(f.get_cheats()))
 
-    async def game_show(self, ctx, replay=None):
-        client = self.bot
-        if not replay:
-            rounds = 3
-            difficulties = ["easy", "medium", "hard"]
-            await ctx.send("So who is playing?")
-            try:
-                msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
-            except asyncio.TimeoutError:
-                return await ctx.send("No one? Got it.")
-            players = msg.content.split(" ")
-            confirmed_players = []
-            confirmed_players.append(self.GameShow(ctx.author))
-            for player in players:
-                try:
-                    member = await msg.guild.fetch_member(int(player.replace("<", "").replace(">", "").replace("@", "").replace("!", "")))
-                except discord.errors.NotFound:
-                    continue
-                except discord.errors.HTTPException:
-                    continue
-                except ValueError:
-                    continue
-                # for cplayer in confirmed_players:
-                #    if member == cplayer.member:
-                #       yield cplayer
-                result = [
-                    cplayer for cplayer in confirmed_players if member == cplayer.member]
-                if result:
-                    continue
-                await ctx.send("Do you wish to play {} ?".format(member.mention))
-                try:
-                    msg = await client.wait_for('message', check=utils.check(member), timeout=60)
-                except asyncio.TimeoutError:
-                    await ctx.send("No response? Fine then.")
-                    continue
-                if msg.content.lower() == "yes":
-                    await ctx.send("Welcome aboard")
-                    confirmed_players.append(self.GameShow(member))
-                else:
-                    await ctx.send("Someone is chicken")
-            await ctx.send("What difficulty do you want to pick?\nEasy\nMedium\nHard\nAuto\nRandom")
-            try:
-                msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
-            except asyncio.TimeoutError:
-                await ctx.send("No response? Then we will do random")
-                msg = None
-            if msg:
-                if msg.content.lower() in difficulties:
-                    difficulty = msg.content.lower()
-                elif msg.content.lower() == "auto":
-                    await ctx.send("auto is not supported yet. Good luck on random difficulty")
-                    difficulty = ""
-                else:
-                    difficulty = ""
-            else:
-                difficulty = ""
-            await ctx.send("How many rounds?")
-            try:
-                msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
-            except asyncio.TimeoutError:
-                await ctx.send("No response? Then we will do " + str(rounds) + " rounds")
-            if utils.is_int(msg.content):
-                rounds = int(msg.content)
-                if (rounds * len(confirmed_players)) > 50:
-                    await ctx.send("Too many rounds given a max of 50 questions will be given.")
-                    rounds = 50 // len(confirmed_players)
-        else:
-            rounds = replay[0]
-            difficulty = replay[1]
-            confirmed_players = replay[2]
-        await ctx.send("That appears to be everyone but lets list them here")
-        names = ""
-        for player in confirmed_players:
-            names += player.member.mention
-            names += "\n"
-        await ctx.send(names + "\nMay the odds be ever in your favor\nto quit say the following\n**I wish to quit**")
-        q_number = rounds * len(confirmed_players)
-        url = "https://opentdb.com/api.php?amount=" + \
-            str(q_number) + "&difficulty=" + difficulty
-        try:
-            api_QA = requests.get(url).json()
-        except requests.exceptions.RequestException as e:
-            return await ctx.send("I have a bug. Tell my creator\n", e)
-        j = 0
-        quitting = False
-        while j < q_number and not quitting:
-            for player in confirmed_players:
-                question = ""
-                if player.quitting:
-                    j += 1
-                    continue
-                try:
-                    if api_QA["results"][j]["type"] == "boolean":
-                        question += "True or False?\n"
-                    question += utils.decodeHTMLSymbols(
-                        api_QA["results"][j]["question"])
-                    if api_QA["results"][j]["type"] == "multiple":
-                        choices = []
-                        choices.append(utils.decodeHTMLSymbols(
-                            api_QA["results"][j]["correct_answer"]))
-                        for ans in api_QA["results"][j]["incorrect_answers"]:
-                            choices.append(utils.decodeHTMLSymbols(ans))
-                        question += "\nChoices:\n"
-                        while len(choices) > 1:
-                            i = random.randint(0, len(choices) - 1)
-                            question += (choices[i] + "\n")
-                            del choices[i]
-                        question += choices[0]
-                    answer = utils.decodeHTMLSymbols(
-                        api_QA["results"][j]["correct_answer"])
-                    j += 1
-                except KeyError as e:
-                    return await ctx.send("I have a bug in my API usage. Please open an issue with my creator and tell him\n", e)
-                await ctx.send(player.member.mention + "\n" + question)
-                try:
-                    msg = await client.wait_for('message', check=utils.check(player.member), timeout=30)
-                except asyncio.TimeoutError:
-                    msg = "No reply"
-                if msg == "No reply":
-                    await ctx.send("The correct answer was " + answer)
-                elif msg.content.lower() == answer.lower():
-                    await msg.add_reaction('✅')
-                    await ctx.send("correct!")
-                    player.score += 1
-                elif msg.content.lower() == "i wish to quit":
-                    await ctx.send("Do you wish to quit " + (player.member.nick if player.member.nick != None else player.member.name) + "?")
-                    try:
-                        msg = await client.wait_for('message', check=utils.check(player.member), timeout=30)
-                    except asyncio.TimeoutError:
-                        pass
-                    if msg.content.lower() == "yes":
-                        player.quitting = True
-                        await ctx.send("Alright quitter")
-                else:
-                    await msg.add_reaction('❎')
-                    await ctx.send("Wrong. The correct answer was " + answer)
-                if quitting:
-                    break
-                await asyncio.sleep(2)
-        await ctx.send("Thanks for playing here are the final results")
-        final_results = ""
-        for player in confirmed_players:
-            if player.quitting:
-                final_results += "~~" + \
-                    (player.member.nick if player.member.nick != None else player.member.name) + "'s~~ Quitter Score: " + \
-                    str(player.score) + "\n"
-            else:
-                final_results += (player.member.nick if player.member.nick != None else player.member.name) + \
-                    "'s Score: " + str(player.score) + "\n"
-        await ctx.send(final_results)
-        await ctx.send("Wanna play again?")
-        try:
-            msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
-        except asyncio.TimeoutError:
-            return await ctx.send("No? Got it.")
-
-        if msg.content.lower() == "yes" or msg.content.lower() == "y":
-            for player in confirmed_players:
-                player.score = 0
-            await self.game_show(ctx, (rounds, difficulty, confirmed_players))
-
+    async def game_show(self, ctx):
+        game = GameShow()
+        await ctx.send("Creating a thread.")
+        thread = await ctx.message.channel.create_thread(name="Game show", type=discord.ChannelType.public_thread, auto_archive_duration=60)
+        await game.setup_game(ctx, thread, self.bot)
+        await game.run_game(ctx, thread, self.bot)
+        
     async def bridge_of_death(self, ctx):
         client = self.bot
         colors = ["red", "green", "blue", "black", "white",
@@ -811,205 +658,7 @@ class Game(commands.Cog):
             if penalty < 0:
                 penalty = penalty * -1
             score = score - penalty
-            if word == answer:
-                win = True
-                continue
-            for i in range(len(answer)):
-                for j in range(len(word)):
-                    if answer[i] == word[j]:
-                        secret = secret[:j] + answer[i] + secret[j+1:]
-        if win:
-            return await ctx.send("You got the word! You score was {}".format(score))
-        else:
-            return await ctx.send("You did your best\nthe word was {}".format(word))
-
-
-    async def guess(self, ctx):
-        client = self.bot
-        words = ["ability", "able", "about", "above", "accept", "according",
-                 "account", "across", "act", "action", "activity", "actually",
-                 "add", "address", "administration", "admit", "adult", "affect",
-                 "after", "again", "against", "age", "agency", "agent", "ago",
-                 "agree", "agreement", "ahead", "air", "all", "allow",
-                 "almost", "alone", "along", "already", "also", "although",
-                 "always", "American", "among", "amount", "analysis", "and",
-                 "animal", "another", "answer", "any", "anyone", "anything",
-                 "appear", "apply", "approach", "area", "argue", "arm",
-                 "around", "arrive", "art", "article", "artist", "as",
-                 "ask", "assume", "at", "attack", "attention", "attorney",
-                 "audience", "author", "authority", "available", "avoid", "away",
-                 "baby", "back", "bad", "bag", "ball", "bank",
-                 "bar", "base", "be", "beat", "beautiful", "because",
-                 "become", "bed", "before", "begin", "behavior", "behind",
-                 "believe", "benefit", "best", "better", "between", "beyond",
-                 "big", "bill", "billion", "bit", "black", "blood",
-                 "blue", "board", "body", "book", "born", "both",
-                 "box", "boy", "break", "bring", "brother", "budget",
-                 "build", "building", "business", "but", "buy", "by",
-                 "call", "camera", "campaign", "can", "cancer", "candidate",
-                 "capital", "car", "card", "care", "career", "carry",
-                 "case", "catch", "cause", "cell", "center", "central",
-                 "century", "certain", "certainly", "chair", "challenge", "chance",
-                 "change", "character", "charge", "check", "child", "choice",
-                 "choose", "church", "citizen", "city", "civil", "claim",
-                 "class", "clear", "clearly", "close", "coach", "cold",
-                 "collection", "college", "color", "come", "commercial", "common",
-                 "community", "company", "compare", "computer", "concern", "condition",
-                 "conference", "Congress", "consider", "consumer", "contain", "continue",
-                 "control", "cost", "could", "country", "couple", "course",
-                 "court", "cover", "create", "crime", "cultural", "culture",
-                 "cup", "current", "customer", "cut", "dark", "data",
-                 "daughter", "day", "dead", "deal", "death", "debate",
-                 "decade", "decide", "decision", "deep", "defense", "degree",
-                 "Democrat", "democratic", "describe", "design", "despite", "detail",
-                 "determine", "develop", "development", "die", "difference", "different",
-                 "difficult", "dinner", "direction", "director", "discover", "discuss",
-                 "discussion", "disease", "do", "doctor", "dog", "door",
-                 "down", "draw", "dream", "drive", "drop", "drug",
-                 "during", "each", "early", "east", "easy", "eat",
-                 "economic", "economy", "edge", "education", "effect", "effort",
-                 "eight", "either", "election", "else", "employee", "end",
-                 "energy", "enjoy", "enough", "enter", "entire", "environment",
-                 "environmental", "especially", "establish", "even", "evening", "event",
-                 "ever", "every", "everybody", "everyone", "everything", "evidence",
-                 "exactly", "example", "executive", "exist", "expect", "experience",
-                 "expert", "explain", "eye", "face", "fact", "factor",
-                 "fail", "fall", "family", "far", "fast", "father",
-                 "fear", "federal", "feel", "feeling", "few", "field",
-                 "fight", "figure", "fill", "film", "final", "finally",
-                 "financial", "find", "fine", "finger", "finish", "fire",
-                 "firm", "first", "fish", "five", "floor", "fly",
-                 "focus", "follow", "food", "foot", "for", "force",
-                 "foreign", "forget", "form", "former", "forward", "four",
-                 "free", "friend", "from", "front", "full", "fund",
-                 "future", "game", "garden", "gas", "general", "generation",
-                 "get", "girl", "give", "glass", "go", "goal",
-                 "good", "government", "great", "green", "ground", "group",
-                 "grow", "growth", "guess", "gun", "guy", "hair",
-                 "half", "hand", "hang", "happen", "happy", "hard",
-                 "have", "he", "head", "health", "hear", "heart",
-                 "heat", "heavy", "help", "her", "here", "herself",
-                 "high", "him", "himself", "his", "history", "hit",
-                 "hold", "home", "hope", "hospital", "hot", "hotel",
-                 "hour", "house", "how", "however", "huge", "human",
-                 "hundred", "husband", "I", "idea", "identify", "if",
-                 "image", "imagine", "impact", "important", "improve", "in",
-                 "include", "including", "increase", "indeed", "indicate", "individual",
-                 "industry", "information", "inside", "instead", "institution", "interest",
-                 "interesting", "international", "interview", "into", "investment", "involve",
-                 "issue", "it", "item", "its", "itself", "job",
-                 "join", "just", "keep", "key", "kid", "kill",
-                 "kind", "kitchen", "know", "knowledge", "land", "language",
-                 "large", "last", "late", "later", "laugh", "law",
-                 "lawyer", "lay", "lead", "leader", "learn", "least",
-                 "leave", "left", "leg", "legal", "less", "let",
-                 "letter", "level", "lie", "life", "light", "like",
-                 "likely", "line", "list", "listen", "little", "live",
-                 "local", "long", "look", "lose", "loss", "lot",
-                 "love", "low", "machine", "magazine", "main", "maintain",
-                 "major", "majority", "make", "man", "manage", "management",
-                 "manager", "many", "market", "marriage", "material", "matter",
-                 "may", "maybe", "me", "mean", "measure", "media",
-                 "medical", "meet", "meeting", "member", "memory", "mention",
-                 "message", "method", "middle", "might", "military", "million",
-                 "mind", "minute", "miss", "mission", "model", "modern",
-                 "moment", "money", "month", "more", "morning", "most",
-                 "mother", "mouth", "move", "movement", "movie", "Mr",
-                 "Mrs", "much", "music", "must", "my", "myself",
-                 "name", "nation", "national", "natural", "nature", "near",
-                 "nearly", "necessary", "need", "network", "never", "new",
-                 "news", "newspaper", "next", "nice", "night", "no",
-                 "none", "nor", "north", "not", "note", "nothing",
-                 "notice", "now", "number", "occur", "of", "off",
-                 "offer", "office", "officer", "official", "often", "oh",
-                 "oil", "ok", "old", "on", "once", "one",
-                 "only", "onto", "open", "operation", "opportunity", "option",
-                 "or", "order", "organization", "other", "others", "our",
-                 "out", "outside", "over", "own", "owner", "page",
-                 "pain", "painting", "paper", "parent", "part", "participant",
-                 "particular", "particularly", "partner", "party", "pass", "past",
-                 "patient", "pattern", "pay", "peace", "people", "per",
-                 "perform", "performance", "perhaps", "period", "person", "personal",
-                 "phone", "physical", "pick", "picture", "piece", "place",
-                 "plan", "plant", "play", "player", "PM", "point",
-                 "police", "policy", "political", "politics", "poor", "popular",
-                 "population", "position", "positive", "possible", "power", "practice",
-                 "prepare", "present", "president", "pressure", "pretty", "prevent",
-                 "price", "private", "probably", "problem", "process", "produce",
-                 "product", "production", "professional", "professor", "program", "project",
-                 "property", "protect", "prove", "provide", "public", "pull",
-                 "purpose", "push", "put", "quality", "question", "quickly",
-                 "quite", "race", "radio", "raise", "range", "rate",
-                 "rather", "reach", "read", "ready", "real", "reality",
-                 "realize", "really", "reason", "receive", "recent", "recently",
-                 "recognize", "record", "red", "reduce", "reflect", "region",
-                 "relate", "relationship", "religious", "remain", "remember", "remove",
-                 "report", "represent", "Republican", "require", "research", "resource",
-                 "respond", "response", "responsibility", "rest", "result", "return",
-                 "reveal", "rich", "right", "rise", "risk", "road",
-                 "rock", "role", "room", "rule", "run", "safe",
-                 "same", "save", "say", "scene", "school", "science",
-                 "scientist", "score", "sea", "season", "seat", "second",
-                 "section", "security", "see", "seek", "seem", "sell",
-                 "send", "senior", "sense", "series", "serious", "serve",
-                 "service", "set", "seven", "several", "sex", "sexual",
-                 "shake", "share", "she", "shoot", "short", "shot",
-                 "should", "shoulder", "show", "side", "sign", "significant",
-                 "similar", "simple", "simply", "since", "sing", "single",
-                 "sister", "sit", "site", "situation", "six", "size",
-                 "skill", "skin", "small", "smile", "so", "social",
-                 "society", "soldier", "some", "somebody", "someone", "something",
-                 "sometimes", "son", "song", "soon", "sort", "sound",
-                 "source", "south", "southern", "space", "speak", "special",
-                 "specific", "speech", "spend", "sport", "spring", "staff",
-                 "stage", "stand", "standard", "star", "start", "state",
-                 "statement", "station", "stay", "step", "still", "stock",
-                 "stop", "store", "story", "strategy", "street", "strong",
-                 "structure", "student", "study", "stuff", "style", "subject",
-                 "success", "successful", "such", "suddenly", "suffer", "suggest",
-                 "summer", "support", "sure", "surface", "system", "table",
-                 "take", "talk", "task", "tax", "teach", "teacher",
-                 "team", "technology", "television", "tell", "ten", "tend",
-                 "term", "test", "than", "thank", "that", "the",
-                 "their", "them", "themselves", "then", "theory", "there",
-                 "these", "they", "thing", "think", "third", "this",
-                 "those", "though", "thought", "thousand", "threat", "three",
-                 "through", "throughout", "throw", "thus", "time", "to",
-                 "today", "together", "tonight", "too", "top", "total",
-                 "tough", "toward", "town", "trade", "traditional", "training",
-                 "travel", "treat", "treatment", "tree", "trial", "trip",
-                 "trouble", "true", "truth", "try", "turn", "TV",
-                 "two", "type", "under", "understand", "unit", "until",
-                 "up", "upon", "us", "use", "usually", "value",
-                 "various", "very", "victim", "view", "violence", "visit",
-                 "voice", "vote", "wait", "walk", "wall", "want",
-                 "war", "watch", "water", "way", "we", "weapon",
-                 "wear", "week", "weight", "well", "west", "western",
-                 "what", "whatever", "when", "where", "whether", "which",
-                 "while", "white", "who", "whole", "whom", "whose",
-                 "why", "wide", "wife", "will", "win", "wind",
-                 "window", "wish", "with", "within", "without", "woman",
-                 "wonder", "word", "work", "worker", "world", "worry",
-                 "would", "write", "writer", "wrong", "yard", "yeah",
-                 "year", "yes", "yet", "you", "young", "your", "yourself"]
-        word = words[random.randint(0, len(words) - 1)]
-        secret = "-"*len(word)
-        score = 1100
-        win = False
-        while not win and not score <= 0:
-            score -= 100
-            await ctx.send("The secret word is {}\nyour current score is {}".format(secret, score))
-            try:
-                msg = await client.wait_for('message', check=utils.check(ctx.author), timeout=60)
-            except asyncio.TimeoutError:
-                await ctx.send("Thanks for playing...\nthe word was {}".format(word))
-                return
-            answer = msg.content.lower()
-            penalty = (len(answer) - len(word)) * 50
-            if penalty < 0:
-                penalty = penalty * -1
-            score = score - penalty
-            if word == answer:
+            if word.lower() == answer:
                 win = True
                 continue
             for i in range(len(answer)):

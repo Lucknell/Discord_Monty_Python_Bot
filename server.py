@@ -45,19 +45,14 @@ async def callback():
 async def dashboard():
     if not await discord.authorized:
         return redirect(url_for("login"))
-
     guild_count = await ipc_client.request("get_guild_count")
     guild_ids = await ipc_client.request("get_guild_ids")
-
     user_guilds = await discord.fetch_guilds()
-
     guilds = []
-
     for guild in user_guilds:
         if guild.permissions.administrator:
             guild.class_color = "green-border" if guild.id in guild_ids else "red-border"
             guilds.append(guild)
-
     guilds.sort(key = lambda x: x.class_color == "red-border")
     name = (await discord.fetch_user()).name
     return await render_template("dashboard.html", guild_count = guild_count, guilds = guilds, username=name)
@@ -86,7 +81,7 @@ async def post_done_jobs(guild_id):
     results = await ipc_client.request("post_jobs")
     print (results)
     return results
-
+#https://stackoverflow.com/questions/70825704/getting-error-message-using-ffmpeg-python-null-000002486ae7b180-unable-to-f
 def compress_video(video_full_path, output_file_name, target_size):
     # Reference: https://en.wikipedia.org/wiki/Bit_rate#Encoding_bit_rate
     min_audio_bitrate = 32000
@@ -111,6 +106,7 @@ def compress_video(video_full_path, output_file_name, target_size):
     video_bitrate = target_total_bitrate - audio_bitrate
 
     i = ffmpeg.input(video_full_path)
+    # https://trac.ffmpeg.org/wiki/Encode/H.264#twopass
     ffmpeg.output(i, os.devnull,
                   **{'c:v': 'libx264', 'b:v': video_bitrate, 'pass': 1, 'f': 'mp4'}
                   ).overwrite_output().run()
@@ -156,7 +152,7 @@ def update_jobs(guild_id: int):
                 client.Monty.downloader.update_one(i, update)
                 x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
                 continue
-        elif "twitter.com" in URL:
+        elif "twitter.com" in URL or "x.com" in URL:
             is_video = True
             ydl_opts = {
                 'outtmpl' : path + '%(id)s.%(ext)s',
@@ -194,14 +190,27 @@ def update_jobs(guild_id: int):
                         client.Monty.downloader.update_one(i, update)
                         x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
                         continue
-        the_file = max(glob.iglob(path+'*'), key=os.path.getctime)
+        try:
+            the_file = max(glob.iglob(path+'*'), key=os.path.getctime)
+        except ValueError:
+            print(glob.iglob(path+'*'))
+            update = {"$set": {"state":"Failed to download"}}
+            client.Monty.downloader.update_one(i, update)
+            x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
+            continue
         while ".part" in the_file:
             os.remove(the_file)
             the_file = max(glob.iglob(path+'*'), key=os.path.getctime)
         print((os.path.getsize(the_file)/(1024*1024)))
         if ((os.path.getsize(the_file)/(1024*1024)) > 8):
             cfile = the_file.replace(path,"")
-            compress_video(the_file, path+"compressed_"+cfile, 7800)
+            try:
+                compress_video(the_file, path+"compressed_"+cfile, 7800)
+            except ffmpeg._run.Error as e:
+                update = {"$set": {"state":"Failed to download"}}
+                client.Monty.downloader.update_one(i, update)
+                x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
+                continue
             if os.path.exists(the_file):
                 os.remove(the_file)
             the_file =  path+"compressed_"+cfile
@@ -213,6 +222,5 @@ def update_jobs(guild_id: int):
         print(f"ending thread for {URL}")
     x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
     print (x)
-
 if __name__ == "__main__":
     app.run(debug=True)

@@ -90,12 +90,13 @@ class Monty(commands.Cog):
                    '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
         valid_voters = [self.bot.user.id]
 
-        count = len(poll.content.split("\n")) - 2
+        count = len(poll.content.split("\n")) - 3
         options = {x[:3]: x[4:] for x in poll.content.split("\n")[2:count+1]}
+        print(count, options)
         tally = {x: 0 for x in current[:count]}
         for reaction in poll.reactions:
             if reaction.emoji in current[:count]:
-                voters = await reaction.users().flatten()
+                voters = [user async for user in reaction.users()]
                 for voter in voters:
                     if voter.id not in valid_voters:
                         tally[reaction.emoji] += 1
@@ -167,7 +168,6 @@ class Monty(commands.Cog):
                 await msg.add_reaction(emojis[letter])
             except KeyError:
                 pass
-        return await ctx.send("Done.")
 
     @commands.hybrid_command(name = "flip", with_app_command = True, description ="flip a coin")
     async def flip(self, ctx: commands.Context):
@@ -175,7 +175,8 @@ class Monty(commands.Cog):
         if coin == 1:
             return await ctx.send("Heads")
         else:
-            return await ctx.send("Tails")        
+            return await ctx.send("Tails")
+        
 
 async def setup(bot):
     await bot.add_cog(Monty(bot))

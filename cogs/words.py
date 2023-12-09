@@ -1,7 +1,9 @@
 from discord.ext import commands
 import discord
 import requests
-from cogs.lucknell.dictt import word_search, WordNotFoundError
+import sys
+sys.path.append("/src/bot/cogs/lucknell/")
+from dictt import word_search, WordNotFoundError
  
 class Words(commands.Cog):
     def __init__(self, bot):

@@ -1,3 +1,4 @@
+from ovos_tts_plugin_mimic3_server import Mimic3ServerTTSPlugin
 import os
 import discord
 import rlvoice
@@ -5,6 +6,7 @@ import time
 import asyncio
 import random
 import re
+import traceback
 
 queue = {}
 connected = {}
@@ -17,115 +19,74 @@ class SpeechQ:
         self.playing = playing
         self.speeches = speeches
 
-
-async def TTStime(ctx, speak, lang, client, say=None, rate=None, name=""):
-    await ctx.send("Attempting...", ephemeral = True)
-    if not say:
-        temp = ctx.message.content.lower().split(speak)
-        temp = await shift(temp)
-        speech = await join(temp, speak)
-    else:
-        speech = say
+async def create_voice_and_play(ctx, speech, lang, client):
+    await ctx.send(f"Attempting to say:{speech}")
     connection = None
     v_channel = ctx.message.author.voice
-    if len(speech) < 6:
-        return await ctx.send("too little to speak make your phrase longer")
-    if v_channel:
-        if ctx.message.author.voice.self_deaf or ctx.message.author.voice.deaf:
-            return await ctx.message.channel.send("you aren't going to listen to me anyways")
-        serverQueue = queue.get(ctx.message.guild.id)
-        millis = int(round(time.time() * 1000))
-        # no name conflicts should be possible
-        file = "voice" + str(millis) + \
-            str(ctx.message.author.id) + name + ".mp3"
-        if not rate:
-            rate = 175
-        if serverQueue != None:
-            return serverQueue.speeches.append((speech, file, rate, lang))
-        try:
-            voice_client = discord.utils.get(
-                client.voice_clients, guild=ctx.message.guild)
-            if voice_client and voice_client.is_connected():
-                serverQueue = SpeechQ(ctx.message.channel, [
-                                      (speech, file, rate, lang)], voice_client, 1)
-                queue.update({ctx.message.guild.id: serverQueue})
-            else:
-                connection = await v_channel.channel.connect(timeout=20, reconnect=True)
-                serverQueue = SpeechQ(ctx.message.channel, [
-                                      (speech, file, rate, lang)], connection, 1)
-                queue.update({ctx.message.guild.id: serverQueue})
-                connected.update({ctx.message.guild.id: connection})
-            play_next(ctx.message.guild, client)
-        except discord.errors.ClientException:
-            return await connection.disconnect(force=True)
-        except Exception as e:
-            print(e)
-            print("Exception?")
-            if connection:
-                await connection.disconnect(force=True)
-    else:
-        await ctx.message.channel.send("you are not in a voice channel")
+    if not v_channel:
+        return await ctx.message.channel.send("you are not in a voice channel")
+    if ctx.message.author.voice.self_deaf or ctx.message.author.voice.deaf:
+        return await ctx.message.channel.send("you aren't going to listen to me anyways")
+    voice_queue = queue.get(ctx.message.guild.id)
+    millis = int(round(time.time() * 1000))
+    # no name conflicts should be possible
+    file = f"voice{millis}{ctx.message.author.id}.wav"
+    if voice_queue != None:
+        return voice_queue.speeches.append((speech, file, lang))
+    try:
+        voice_client = discord.utils.get(
+            client.voice_clients, guild=ctx.message.guild)
+        if voice_client and voice_client.is_connected():
+            voice_queue = SpeechQ(ctx.message.channel, [
+                                  (speech, file, lang)], voice_client, 1)
+            queue.update({ctx.message.guild.id: voice_queue})
+        else:
+            connection = await v_channel.channel.connect(timeout=20, reconnect=True)
+            voice_queue = SpeechQ(ctx.message.channel, [
+                                  (speech, file, lang)], connection, 1)
+            queue.update({ctx.message.guild.id: voice_queue})
+            connected.update({ctx.message.guild.id: connection})
+        await play_next(ctx.message.guild, client)
+    except discord.errors.ClientException:
+        return await connection.disconnect(force=True)
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        print("Exception?")
+        if connection:
+            await connection.disconnect(force=True)
 
 
-def play_next(guild, client):
-    serverQueue = queue.get(guild.id)
-    if not serverQueue:
+async def play_next(guild, client):
+    voice_queue = queue.get(guild.id)
+    if not voice_queue:
         return
 
-    if len(serverQueue.speeches) == 0:
+    if len(voice_queue.speeches) == 0:
         queue.pop(guild.id)
-        future = asyncio.run_coroutine_threadsafe(
-            asyncio.sleep(120), client.loop)
-        try:
-            future.result(timeout=121)
-        except asyncio.TimeoutError:
-            print('The coroutine took too long, cancelling the task...')
         q = queue.get(guild.id)
         if q:
             return
-        future = asyncio.run_coroutine_threadsafe(
-            serverQueue.connection.disconnect(), client.loop)
-        try:
-            future.result(timeout=60)
-        except asyncio.TimeoutError:
-            print('The coroutine took too long, cancelling the task...')
-            return future.cancel()
-    else:
-        tupleQ = serverQueue.speeches.pop(0)
-        create_voice(tupleQ)
-        # the mp3 file is not ready right away
-        time.sleep(len(tupleQ[0]) * .007)
-        if not os.path.isfile(tupleQ[1]):
-            future = asyncio.run_coroutine_threadsafe(
-                serverQueue.textCh.send("An error occurred. Sorry about that"))
-            try:
-                future.result(timeout=30)
-            except asyncio.TimeoutError:
-                print('The coroutine took too long, cancelling the task...')
-        serverQueue.connection.play(discord.FFmpegPCMAudio(
-            tupleQ[1]), after=lambda x: clean_up(guild, tupleQ[1], client))
+    curr_voice = voice_queue.speeches.pop(0)
+    create_voice(curr_voice)
+    voice_queue.connection.play(discord.FFmpegPCMAudio(
+        curr_voice[1]), after=lambda x: asyncio.run_coroutine_threadsafe(clean_up(guild, curr_voice[1], client), client.loop))
     return
 
 
-def clean_up(guild, file, client):
+async def clean_up(guild, file, client):
     if file:
         try:
             os.remove(file)
         except FileNotFoundError as e:
             print(e)
-    play_next(guild, client)
+    await play_next(guild, client)
 
 
-def create_voice(tupleQ):
-    engine = rlvoice.init()
-    engine.setProperty('rate', tupleQ[2])
-    voices = engine.getProperty('voices')
-    voice = voices[tupleQ[3]]
-    engine.setProperty('voice', voice.id)
-    engine.save_to_file(tupleQ[0], tupleQ[1])
-    engine.runAndWait()
-    engine.stop()
-
+def create_voice(curr_voice):
+    mimic = Mimic3ServerTTSPlugin()
+    mimic.get_tts(curr_voice[0], curr_voice[1], voice=curr_voice[2])
+    
 
 async def dc(ctx):
     if ctx.message.author.voice and ctx.message.author.voice.channel:
@@ -134,8 +95,12 @@ async def dc(ctx):
             return await ctx.send("Not connected")
         await connection.disconnect()
         await ctx.send("That's all folks!")
-        queue.pop(ctx.message.guild.id)
+        try:
+            queue.pop(ctx.message.guild.id)
+        except KeyError as e:
+            pass
         connected.pop(ctx.message.guild.id)
+        
     else:
         await ctx.send("You are not in a voice channel")
 
@@ -143,10 +108,10 @@ async def dc(ctx):
 async def skip(ctx):
     if not ctx.message.author.voice.channel:
         return
-    serverQueue = queue.get(ctx.message.guild.id)
-    if serverQueue == None:
+    voice_queue = queue.get(ctx.message.guild.id)
+    if voice_queue == None:
         return
-    serverQueue.connection.stop()
+    voice_queue.connection.stop()
 
 
 async def join(list, word):
@@ -189,6 +154,25 @@ def check(author):
         return message.author == author
     return inner_check
 
+def check_interaction_from_user(author):
+    def inner_check(interaction):
+        return interaction.user == author
+    return inner_check
+
+def check_interaction(author):
+    def inner_check(interaction):
+        return interaction.data["component_type"] == 2 and "custom_id" in interaction.data.keys() and interaction.user == author
+    return inner_check
+
+def check_select_interaction(author):
+    def inner_check(interaction):
+        return interaction.data["component_type"] == 3 and "custom_id" in interaction.data.keys() and interaction.user == author
+    return inner_check
+
+def check_userselect_interaction(author):
+    def inner_check(interaction):
+        return interaction.data["component_type"] == 5 and "custom_id" in interaction.data.keys() and interaction.user == author
+    return inner_check
 
 def KtoF(value):
     return ((value - 273.15)*1.8 + 32)

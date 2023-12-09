@@ -20,7 +20,8 @@ class Download(commands.Cog):
             return await ctx.send("Please provide a valid url")
         if ("v.redd.it" in flags.url or "reddit.com" in flags.url or "twitter.com" in flags.url or
                 "tiktok.com" in flags.url or "instagram.com" in flags.url or 
-                "youtube.com" in flags.url or "youtu.be" in flags.url):
+                "youtube.com" in flags.url or "youtu.be" in flags.url or
+                "x.com" in flags.url):
             return await self.add_url(ctx, flags.url, flags.msg)
         else:
             return await ctx.send("Unsupported sorry!")

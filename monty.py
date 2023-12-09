@@ -8,6 +8,7 @@ from discord.ext import commands, ipc
 from discord import app_commands
 import asyncio
 from pymongo import MongoClient
+from typing import Literal
 import requests
 import time
 
@@ -15,6 +16,7 @@ Bot_Name = "Monty Python"
 prefix = "$"
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 class Bot(commands.Bot):
     def __init__(self,  *args, **kwargs):
@@ -57,7 +59,7 @@ class Bot(commands.Bot):
         jobs = mclient.Monty.downloader.find({"state":"new"})
         for job in jobs:
             new_jobs = True
-            guilds.append (job["server"])
+            guilds.append(job["server"])
         set_guilds = set(guilds)
         if not new_jobs:
             print("No pending jobs")
@@ -102,8 +104,9 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 @client.hybrid_command(name = "test", with_app_command = True, description = "Hope that this works ")
-async def test(ctx: commands.Context):
+async def test(ctx: commands.Context, temp: Literal['Hello', 'World']):
     await ctx.reply("It did not.")
+    print (temp, "cheese")
 
 avatar_path = "/src/bot/avatar.png"
 fp = open(avatar_path, 'rb')

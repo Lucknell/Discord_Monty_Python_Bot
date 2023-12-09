@@ -35,4 +35,5 @@ class Yugioh(commands.Cog):
         except discord.errors.HTTPException:
             await ctx.send("Your search results were sent to the Shadow Realm")
 
+async def setup(bot):
     await bot.add_cog(Yugioh(bot))
