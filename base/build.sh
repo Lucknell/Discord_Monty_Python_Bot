@@ -1,3 +1,5 @@
 #docker images
 #docker tag <image id> monty_base
-docker build  -t monty_python:latest .
+cd ../
+docker build -f base/Dockerfile -t monty_python:latest .
+cd -

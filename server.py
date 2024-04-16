@@ -1,18 +1,22 @@
+import os
+import glob
+import ffmpeg
+import yt_dlp
+import requests
+import threading
+import selenium.common.exceptions
+
 from quart import Quart, render_template, request, session, redirect, url_for
 from quart_discord import DiscordOAuth2Session
 from discord.ext import ipc
 from pymongo import MongoClient
+from gpt4all import GPT4All
 from cogs.lucknell.insta_vid import insta_vid, InstaDownloadFailedError
 from cogs.lucknell.reddit_vid import reddit_vid, RedditDownloadFailedError
 from cogs.lucknell.tik_vid import tik_vid, TikTokDownloadFailedError
 from cogs.lucknell.tweet_vid2 import tweet_vid2, Tweet2DownloadFailedError
-import selenium.common.exceptions
-import os
-import glob
-import ffmpeg
-import requests
-import threading
-import yt_dlp
+
+
 
 app = Quart(__name__)
 ipc_client = ipc.Client(secret_key = "theholygrail",)
@@ -79,8 +83,38 @@ async def check_for_jobs(guild_id):
 @app.route("/donejobs/<int:guild_id>")
 async def post_done_jobs(guild_id):
     results = await ipc_client.request("post_jobs")
-    print (results)
+    #print (results)
     return results
+
+@app.route("/checkaijobs/<int:guild_id>")
+async def check_for_ai_jobs(guild_id):
+    threading.Thread(target=update_ai_jobs, args=(guild_id,)).start()
+    return f"Checks started for{guild_id} ai jobs"
+
+@app.route("/doneaijobs/<int:guild_id>")
+async def post_done_ai_jobs(guild_id):
+    results = await ipc_client.request("post_ai_jobs")
+    #print (results)
+    return results
+
+
+def update_ai_jobs(guild_id: int):
+    client = MongoClient("mongodb://192.168.1.107:27017/")
+    for i in client.Monty.gen_text.find({"server": guild_id, "state":"new"}):
+        prompt = i["question"]
+        model = i["model"]
+        temperature = i["temperature"]
+        models = {"mistral":"mistral-7b-instruct-v0.1.Q4_0.gguf","wizardlm":"wizardlm-13b-v1.2.Q4_0.gguf"}
+        file_path = f"/src/bot/models/{models[model]}"
+        chat_model = GPT4All(file_path)
+        with chat_model.chat_session():
+            response = chat_model.generate(prompt=prompt, temp=temperature, n_predict=2048)
+            update = {"$set": {"answer": response, "state":"Ready!"}}
+            client.Monty.gen_text.update_one(i, update)
+            x = requests.get("http://192.168.1.107:5101/doneaijobs/"+str(guild_id))
+            print(x)
+
+
 #https://stackoverflow.com/questions/70825704/getting-error-message-using-ffmpeg-python-null-000002486ae7b180-unable-to-f
 def compress_video(video_full_path, output_file_name, target_size):
     # Reference: https://en.wikipedia.org/wiki/Bit_rate#Encoding_bit_rate
@@ -160,6 +194,17 @@ def update_jobs(guild_id: int):
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 try:
+                    info_dict = ydl.extract_info(URL, download=False)
+                    length = info_dict.get('duration_string', None)
+                    error = 0
+                    if length is None:
+                        raise yt_dlp.utils.DownloadError("This is not a video")
+                    if len(length.split(":")) > 2:
+                        print ("Video was too long")
+                        update = {"$set": {"state":"Failed to download"}}
+                        client.Monty.downloader.update_one(i, update)
+                        x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
+                        continue
                     error = ydl.download([URL])
                 except yt_dlp.utils.DownloadError:
                     is_video = False
@@ -177,19 +222,19 @@ def update_jobs(guild_id: int):
                 'format' : 'best[ext=mp4]'
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info_dict = ydl.extract_info(URL, download=False)
-                    length = info_dict['duration_string']
-                    error = 0
-                    if len(length.split(":")) > 2:
-                        print ("Video was too long")
-                        error = 1
-                    if error == 0:
-                        error = ydl.download([URL])
-                    if not error == 0:
-                        update = {"$set": {"state":"Failed to download"}}
-                        client.Monty.downloader.update_one(i, update)
-                        x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-                        continue
+                info_dict = ydl.extract_info(URL, download=False)
+                length = info_dict['duration_string']
+                error = 0
+                if len(length.split(":")) > 2:
+                    print ("Video was too long")
+                    error = 1
+                if error == 0:
+                    error = ydl.download([URL])
+                if not error == 0:
+                    update = {"$set": {"state":"Failed to download"}}
+                    client.Monty.downloader.update_one(i, update)
+                    x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
+                    continue
         try:
             the_file = max(glob.iglob(path+'*'), key=os.path.getctime)
         except ValueError:
@@ -206,7 +251,7 @@ def update_jobs(guild_id: int):
             cfile = the_file.replace(path,"")
             try:
                 compress_video(the_file, path+"compressed_"+cfile, 7800)
-            except ffmpeg._run.Error as e:
+            except ffmpeg._run.Error:
                 update = {"$set": {"state":"Failed to download"}}
                 client.Monty.downloader.update_one(i, update)
                 x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
