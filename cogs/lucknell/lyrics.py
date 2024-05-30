@@ -69,9 +69,11 @@ class lyric_finder:
         except TimeoutException:
             raise SongNotFoundError("Song not found or input error")
         self.title = __driver.find_element(By.XPATH, "//span[starts-with(@class, 'SongHeaderdesktop')]").text
-        self.lyrics = __driver.find_element(By.XPATH, "//div[starts-with(@class, 'Lyrics__Container')]").text
+        self.lyric = __driver.find_elements(By.XPATH, "//div[starts-with(@class, 'Lyrics__Container')]")
         self.author = __driver.find_element(By.XPATH, "//a[starts-with(@href, 'https://genius.com/artists/')]").text
-
+        self.lyrics = ""
+        for lyric in self.lyric:
+            self.lyrics += f"{lyric.text} "
 class SongNotFoundError(Exception):
     """Error thrown when song is not found"""
     pass

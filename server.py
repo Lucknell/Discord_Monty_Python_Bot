@@ -11,12 +11,6 @@ from quart_discord import DiscordOAuth2Session
 from discord.ext import ipc
 from pymongo import MongoClient
 from gpt4all import GPT4All
-from cogs.lucknell.insta_vid import insta_vid, InstaDownloadFailedError
-from cogs.lucknell.reddit_vid import reddit_vid, RedditDownloadFailedError
-from cogs.lucknell.tik_vid import tik_vid, TikTokDownloadFailedError
-from cogs.lucknell.tweet_vid2 import tweet_vid2, Tweet2DownloadFailedError
-
-
 
 app = Quart(__name__)
 ipc_client = ipc.Client(secret_key = "theholygrail",)
@@ -73,7 +67,7 @@ async def dashboard_server(guild_id):
     result =""
     for i in client.Monty.downloader.find({"server":guild_id}):
         result += str(i) +"\n"
-    return guild["name"] +" Jobs:\n" + result
+    return f'{guild["name"]} Jobs:\n{result}'
 
 @app.route("/checkjobs/<int:guild_id>")
 async def check_for_jobs(guild_id):
@@ -82,9 +76,8 @@ async def check_for_jobs(guild_id):
 
 @app.route("/donejobs/<int:guild_id>")
 async def post_done_jobs(guild_id):
-    results = await ipc_client.request("post_jobs")
-    #print (results)
-    return results
+    response = await ipc_client.request("post_jobs")
+    return response.response
 
 @app.route("/checkaijobs/<int:guild_id>")
 async def check_for_ai_jobs(guild_id):
@@ -93,25 +86,25 @@ async def check_for_ai_jobs(guild_id):
 
 @app.route("/doneaijobs/<int:guild_id>")
 async def post_done_ai_jobs(guild_id):
-    results = await ipc_client.request("post_ai_jobs")
-    #print (results)
-    return results
+    response = await ipc_client.request("post_ai_jobs")
+    return response.response
+
 
 
 def update_ai_jobs(guild_id: int):
     client = MongoClient("mongodb://192.168.1.107:27017/")
-    for i in client.Monty.gen_text.find({"server": guild_id, "state":"new"}):
-        prompt = i["question"]
-        model = i["model"]
-        temperature = i["temperature"]
-        models = {"mistral":"mistral-7b-instruct-v0.1.Q4_0.gguf","wizardlm":"wizardlm-13b-v1.2.Q4_0.gguf"}
-        file_path = f"/src/bot/models/{models[model]}"
+    for job in client.Monty.gen_text.find({"server": guild_id, "state":"new"}):
+        prompt = job["question"]
+        model = job["model"]
+        temperature = job["temperature"]
+        models = {"mistral":"mistral-7b-instruct-v0.1.Q4_0.gguf","wizardlm":"wizardlm-13b-v1.2.Q4_0.gguf","falcon":"gpt4all-falcon-newbpe-q4_0.gguf","mpt":"mpt-7b-chat-newbpe-q4_0.gguf"}
+        file_path = os.path.join("/src/bot/models/", models[model])
         chat_model = GPT4All(file_path)
         with chat_model.chat_session():
             response = chat_model.generate(prompt=prompt, temp=temperature, n_predict=2048)
             update = {"$set": {"answer": response, "state":"Ready!"}}
-            client.Monty.gen_text.update_one(i, update)
-            x = requests.get("http://192.168.1.107:5101/doneaijobs/"+str(guild_id))
+            client.Monty.gen_text.update_one(job, update)
+            x = requests.get(f"http://192.168.1.107:5101/doneaijobs/{guild_id}")
             print(x)
 
 
@@ -148,6 +141,10 @@ def compress_video(video_full_path, output_file_name, target_size):
                   **{'c:v': 'libx264', 'b:v': video_bitrate, 'pass': 2, 'c:a': 'aac', 'b:a': audio_bitrate}
                   ).overwrite_output().run()
 
+def fail_this_job(client, guild_id, job, reason):
+    print (reason)
+    update = {"$set": {"state":"Failed", "reason":reason}}
+    client.Monty.downloader.update_one(job, update)
 
 def update_jobs(guild_id: int):
     path = "/src/bot/down/"
@@ -156,116 +153,56 @@ def update_jobs(guild_id: int):
     tweet = None
     if not os.path.exists(path):
         os.mkdir(path)
-    for i in client.Monty.downloader.find({"server":guild_id, "state":"new"}):
-        URL = i["URL"]
+    for job in client.Monty.downloader.find({"server":guild_id, "state":"new"}):
+        URL = job["URL"]
         new_jobs = True
         has_photo = False
         print(f"starting thread for {URL}")
-        if "v.redd.it" in URL or "reddit.com" in URL:
+        file_path = os.path.join(path, str(id(URL)))
+        if not os.path.exists(file_path):
+            os.mkdir(file_path)
+        ydl_opts = {
+            'outtmpl' : file_path + '/%(id)s.%(ext)s',
+            'format' : 'best[ext=mp4]'
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
-                reddit = reddit_vid(URL)
-            except RedditDownloadFailedError:
-                update = {"$set": {"state":"Failed to download"}}
-                client.Monty.downloader.update_one(i, update)
-                x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-                continue
-        elif "tiktok.com" in URL:
-            try:
-                tiktok = tik_vid(URL)
-            except TikTokDownloadFailedError:
-                update = {"$set": {"state":"Failed to download"}}
-                client.Monty.downloader.update_one(i, update)
-                x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-                continue
-        elif "instagram.com" in URL:
-            try:
-                ig = insta_vid()
-                ig.insta_getvid(URL)
-            except InstaDownloadFailedError:
-                update = {"$set": {"state":"Failed to download"}}
-                client.Monty.downloader.update_one(i, update)
-                x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-                continue
-        elif "twitter.com" in URL or "x.com" in URL:
-            is_video = True
-            ydl_opts = {
-                'outtmpl' : path + '%(id)s.%(ext)s',
-                'format' : 'best[ext=mp4]'
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    info_dict = ydl.extract_info(URL, download=False)
-                    length = info_dict.get('duration_string', None)
-                    error = 0
-                    if length is None:
-                        raise yt_dlp.utils.DownloadError("This is not a video")
-                    if len(length.split(":")) > 2:
-                        print ("Video was too long")
-                        update = {"$set": {"state":"Failed to download"}}
-                        client.Monty.downloader.update_one(i, update)
-                        x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-                        continue
-                    error = ydl.download([URL])
-                except yt_dlp.utils.DownloadError:
-                    is_video = False
-            if not is_video:
-                try:
-                    tweet = tweet_vid2(URL)
-                except (Tweet2DownloadFailedError, selenium.common.exceptions.WebDriverException):
-                    update = {"$set": {"state":"Failed to download"}}
-                    client.Monty.downloader.update_one(i, update)
-                    x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-                    continue
-        elif "youtube.com" in URL or "youtu.be" in URL:
-            ydl_opts = {
-                'outtmpl' : path + '%(id)s.%(ext)s',
-                'format' : 'best[ext=mp4]'
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                if "x.com"in URL:
+                    URL = URL.replace("x.com", "twitter.com")
                 info_dict = ydl.extract_info(URL, download=False)
-                length = info_dict['duration_string']
-                error = 0
+                length = info_dict.get('duration_string', None)
+                if length is None:
+                    raise yt_dlp.utils.DownloadError("This is not a video")
                 if len(length.split(":")) > 2:
-                    print ("Video was too long")
-                    error = 1
-                if error == 0:
-                    error = ydl.download([URL])
-                if not error == 0:
-                    update = {"$set": {"state":"Failed to download"}}
-                    client.Monty.downloader.update_one(i, update)
-                    x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
+                    reason = "Video was too long"
+                    fail_this_job(client, guild_id, job, reason)
                     continue
-        try:
-            the_file = max(glob.iglob(path+'*'), key=os.path.getctime)
-        except ValueError:
-            print(glob.iglob(path+'*'))
-            update = {"$set": {"state":"Failed to download"}}
-            client.Monty.downloader.update_one(i, update)
-            x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-            continue
-        while ".part" in the_file:
-            os.remove(the_file)
-            the_file = max(glob.iglob(path+'*'), key=os.path.getctime)
-        print((os.path.getsize(the_file)/(1024*1024)))
-        if ((os.path.getsize(the_file)/(1024*1024)) > 8):
-            cfile = the_file.replace(path,"")
-            try:
-                compress_video(the_file, path+"compressed_"+cfile, 7800)
-            except ffmpeg._run.Error:
-                update = {"$set": {"state":"Failed to download"}}
-                client.Monty.downloader.update_one(i, update)
-                x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
+                ydl.download([URL])
+            except yt_dlp.utils.DownloadError as e:
+                reason = f"Error in download:{e}"
+                fail_this_job(client, guild_id, job, reason)
+                x = requests.get(f"http://192.168.1.107:5101/donejobs/{guild_id}")
+                print(x)
                 continue
-            if os.path.exists(the_file):
-                os.remove(the_file)
-            the_file =  path+"compressed_"+cfile
-        if tweet and tweet.has_photo:
-            has_photo = True
-            the_file = os.listdir(path)
-        update = {"$set": {"state":"Ready!","file": the_file, "pictures": has_photo}}
-        client.Monty.downloader.update_one(i, update)
+        for file in os.listdir(file_path):
+            the_file = os.path.join(file_path, file)
+            if ((os.path.getsize(the_file)/(1024*1024)) > 8):
+                try:
+                    compressed_file = os.path.join(file_path, f"compressed_{file}")
+                    compress_video(the_file, compressed_file, 7800)
+                except ffmpeg._run.Error:
+                    reason = f"Could not compress file{file}"
+                    fail_this_job(client, guild_id, job, reason)
+                    continue
+                if os.path.exists(the_file):
+                    os.remove(the_file)
+        the_file = os.listdir(file_path)
+        update = {"$set": {"state":"Ready!","file": the_file, "path": file_path}}
+        client.Monty.downloader.update_one(job, update)
         print(f"ending thread for {URL}")
-    x = requests.get("http://192.168.1.107:5101/donejobs/"+str(guild_id))
-    print (x)
+        x = requests.get(f"http://192.168.1.107:5101/donejobs/{guild_id}")
+        print(x)
+
+
 if __name__ == "__main__":
     app.run(debug=True)

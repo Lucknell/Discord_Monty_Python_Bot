@@ -22,13 +22,13 @@ class Gen_Text(commands.Cog):
 #        ]
 
     @commands.hybrid_command(name = "askme", with_app_command = True, description ="Let's help me take over the world")
-    async def gen_text(self, ctx: commands.Context, prompt: str, model :Literal['mistral'] ='mistral', temperature: Literal[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] = 0):
+    async def gen_text(self, ctx: commands.Context, prompt: str, model :Literal['mistral', 'wizardlm',"falcon"] ='mistral', temperature: Literal[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] = 0):
         temp = temperature/10
         await self.add_ai_job(ctx, prompt, model, temp)
         #threading.Thread(target=self.ai_response, args=(ctx, prompt, message, model, temp)).start()
     
     def ai_response(self, ctx: commands.Context, prompt: str, message, model: str, temperature: float):
-        models = {"mistral":"mistral-7b-instruct-v0.1.Q4_0.gguf","wizardlm":"wizardlm-13b-v1.2.Q4_0.gguf"}
+        models = {"mistral":"mistral-7b-instruct-v0.1.Q4_0.gguf","wizardlm":"wizardlm-13b-v1.2.Q4_0.gguf","mpt":"mpt-7b-chat-newbpe-q4_0.gguf"}
         self.bot.logger.info(model)
         file_path = f"/src/bot/models/{models[model]}"
         chat_model = GPT4All(file_path)

@@ -31,7 +31,7 @@ class Bot(commands.Bot):
         if os.path.exists(filepath):
             files = os.listdir(filepath)
             for f in files:
-                os.remove(filepath+f)
+                os.remove(os.path.join(filepath,f))
             os.rmdir(filepath)
         files = os.listdir("/src/bot/cogs/")
         for f in files:
@@ -51,7 +51,7 @@ class Bot(commands.Bot):
     async def on_ready(self):
         #search for jobs that were added before the reboot
         mclient = MongoClient("mongodb://192.168.1.107:27017/")
-        jobs = mclient.Monty.downloader.find({"state":"Failed to download"})
+        jobs = mclient.Monty.downloader.find({"state": "Failed"})
         for job in jobs:
             await self.process_failed_jobs(job, mclient)
         jobs = mclient.Monty.downloader.find({"state":"Ready!"})
@@ -59,8 +59,7 @@ class Bot(commands.Bot):
             await self.process_unposted_jobs(job, mclient)
         guilds = []
         new_jobs = False
-        jobs = mclient.Monty.downloader.find({"state":"new"})
-        for job in jobs:
+        for job in mclient.Monty.downloader.find({"state":"new"}):
             new_jobs = True
             guilds.append(job["server"])
         set_guilds = set(guilds)
@@ -68,10 +67,9 @@ class Bot(commands.Bot):
             print("No pending jobs")
         for guild in set_guilds:
             print(guild)
-            x = requests.get("http://192.168.1.107:5101/checkjobs/" + str(guild))
+            x = requests.get(f"http://192.168.1.107:5101/checkjobs/{guild}")
             print (x)
-        jobs = mclient.Monty.gen_text.find({"state":"new"})
-        for job in jobs:
+        for job in mclient.Monty.gen_text.find({"state":"new"}):
             new_jobs = True
             guilds.append(job["server"])
         set_guilds = set(guilds)
@@ -79,7 +77,7 @@ class Bot(commands.Bot):
             print("No pending ai jobs")
         for guild in set_guilds:
             print(guild)
-            x = requests.get("http://192.168.1.107:5101/checkaijobs/" + str(guild))
+            x = requests.get(f"http://192.168.1.107:5101/checkaijobs/{guild}")
             print (x)
        
     async def on_command_error(self, ctx, error):
@@ -91,10 +89,11 @@ class Bot(commands.Bot):
             user = job["user_id"]
             message = job["message"]
             msg_id = job["message_id"]
+            reason = job["reason"]
             guild = discord.utils.get(client.guilds, id=int(job["server"]))
             channel = discord.utils.get(guild.channels, id=int(job["channel"]))
             msg = await channel.fetch_message(msg_id)
-            await msg.edit(content =f"Original url: {URL}\nFailed to download")
+            await msg.edit(content =f"Original url: {URL}\nFailed:{reason}")
             mclient.Monty.downloader.delete_one(job)
 
     async def process_unposted_jobs(self, job, mclient):
@@ -135,64 +134,65 @@ async def post_jobs(self, data):
     #IPC cannot send data over. we will have to check for the ready state in the table.
     mclient = MongoClient("mongodb://192.168.1.107:27017/")
     path ="/src/bot/down/"
-    for i in mclient.Monty.downloader.find({"state":"Ready!"}):
-        URL = i["URL"]
-        user = i["user_id"]
-        message = i["message"]
-        msg_id = i["message_id"]
-        guild = discord.utils.get(client.guilds, id=int(i["server"]))
-        channel = discord.utils.get(guild.channels, id=int(i["channel"]))
-        if i["pictures"]:
+    for job in mclient.Monty.downloader.find({"state":"Ready!"}):
+        URL = job["URL"]
+        user = job["user_id"]
+        message = job["message"]
+        msg_id = job["message_id"]
+        guild = discord.utils.get(client.guilds, id=int(job["server"]))
+        channel = discord.utils.get(guild.channels, id=int(job["channel"]))
+        print(job)
+        if isinstance(job["file"], list):
             try:
                 msg = await channel.fetch_message(msg_id)
             except Exception as e:
                 print (e)
-                mclient.Monty.downloader.delete_one(i)
+                mclient.Monty.downloader.delete_one(job)
                 continue
             await msg.edit(content =f"Original url: {URL}\n{message}")
-            for file in i["file"]:
-                if not file.endswith(".jpg"):
+            for file in job["file"]:
+                file_path = os.path.join(job["path"],file)
+                if ((os.path.getsize(file_path)/(1024*1024)) > 8):
+                    await channel.send(f"I am sorry <@{user}> that file is getting deleted because it is too large for me to send on discord.\n here is your URL: {URL}")
+                    os.remove(filepath)
+                    mclient.Monty.downloader.delete_one(job)
                     continue
-                await channel.send(file=discord.File(path+file))
-                os.remove(path+file)
-            mclient.Monty.downloader.delete_one(i)
+                try:
+                    msg = await channel.fetch_message(msg_id)
+                except Exception as e:
+                    print (e)
+                    os.remove(file_path)
+                    mclient.Monty.downloader.delete_one(job)
+                    continue
+                await msg.edit(content =f"Original url: {URL}\n{message}")
+                await channel.send(file=discord.File(file_path))
+                os.remove(file_path)
+            mclient.Monty.downloader.delete_one(job)
             continue
-        filepath = str(i["file"])
-        if not path in filepath:
-            filepath = path+str(i["file"])
-
         if not os.path.exists(filepath):
             print(f"{filepath} file not found starting the process again")
             update = {"$set": {"state":"new"}}
-            mclient.Monty.downloader.update_one(i, update)
-            x = requests.get("http://192.168.1.107:5101/checkjobs/"+str(i["server"]))
+            mclient.Monty.downloader.update_one(job, update)
+            x = requests.get(f"http://192.168.1.107:5101/checkjobs/{job["server"]}")
             continue
-
-        if ((os.path.getsize(filepath)/(1024*1024)) <= 8):
-            try:
-                msg = await channel.fetch_message(msg_id)
-            except Exception as e:
-                print (e)
-                os.remove(filepath)
-                mclient.Monty.downloader.delete_one(i)
-                continue
-            await msg.edit(content =f"Original url: {URL}\n{message}")
-            await channel.send(file=discord.File(filepath))
-            os.remove(filepath)
-        elif ((os.path.getsize(filepath)/(1024*1024)) > 8):
-            await channel.send(f"I am sorry <@{user}> that file is getting deleted because it is too large for me to send on discord.\n here is your URL: {URL}")
-            os.remove(filepath)
-        mclient.Monty.downloader.delete_one(i)
-    for i in mclient.Monty.downloader.find({"state":"Failed to download"}):
-        await client.process_failed_jobs(i, mclient)
+        
+    for job in mclient.Monty.downloader.find({"state":"Failed"}):
+        await client.process_failed_jobs(job, mclient)
     jobs = False
-    for i in mclient.Monty.downloader.find():
+    for job in mclient.Monty.downloader.find():
         jobs = True
     if not jobs:
         files = os.listdir(path)
         for f in files:
-            os.remove(path + f)
-            print(f"deleting {f}")
+            dir_path = os.path.join(path, f)
+            try:
+                print(f"deleting {f}")
+                os.rmdir(dir_path)
+            except OSError:
+                for file in dir_path:
+                    print(f"deleteing {file=}")
+                    os.remove(os.path.join(dir_path, file))
+                os.rmdir(dir_path)
     return "something cool"
 
 
@@ -200,17 +200,17 @@ async def post_jobs(self, data):
 async def post_ai_jobs(self, data):
     #IPC cannot send data over. we will have to check for the ready state in the table.
     mclient = MongoClient("mongodb://192.168.1.107:27017/")
-    for i in mclient.Monty.gen_text.find({"state":"Ready!"}):
-        user = i["user_id"]
-        response = i["answer"]
-        msg_id = i["message_id"]
-        guild = discord.utils.get(client.guilds, id=int(i["server"]))
-        channel = discord.utils.get(guild.channels, id=int(i["channel"]))
+    for job in mclient.Monty.gen_text.find({"state":"Ready!"}):
+        user = job["user_id"]
+        response = job["answer"]
+        msg_id = job["message_id"]
+        guild = discord.utils.get(client.guilds, id=int(job["server"]))
+        channel = discord.utils.get(guild.channels, id=int(job["channel"]))
         try:
             msg = await channel.fetch_message(msg_id)
         except Exception as e:
             print (e)
-            mclient.Monty.gen_text.delete_one(i)
+            mclient.Monty.gen_text.delete_one(job)
             continue
         embed = discord.Embed()
         if len(response) < 1024:
@@ -221,7 +221,7 @@ async def post_ai_jobs(self, data):
             for x in range(interations):
                 embed.add_field(name="‎‎", value=response[x*1024:(x+1)*1024])
             await msg.edit(content="‎‎",embed=embed)
-        mclient.Monty.gen_text.delete_one(i)
+        mclient.Monty.gen_text.delete_one(job)
     return "something ai"
 
 @client.ipc_server.route()
@@ -230,22 +230,18 @@ async def get_guild_count(self, data):
 
 @client.ipc_server.route()
 async def get_guild_idss(self, data):
-    final = []
-    for guild in client.guilds:
-        final.append(guild.id)
+    final = [guild.id for guild in client.guilds]
     return final
 
 @client.ipc_server.route()
 async def get_guild(self, data):
     guild = client.get_guild(data.guild_id)
     if guild is None: return None
-
     guild_data = {
         "name": guild.name,
         "id": guild.id,
         "prefix": "$"
     }
-
     return guild_data
 
 async def main():
