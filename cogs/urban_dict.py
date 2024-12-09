@@ -13,7 +13,7 @@ class Urban(commands.Cog):
     async def urban(self, ctx: commands.Context, phrase: str):
         if not phrase:
             return await ctx.send("I need something to look up on urban dictionary.")
-        await ctx.send("Searching for {}".format(phrase))
+        await ctx.defer()
         try:
             definition = urban_finder(phrase)
         except SongNotFoundError:

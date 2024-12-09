@@ -11,6 +11,7 @@ class Pokemon(commands.Cog):
 
     @commands.hybrid_command(name = "pkmn", with_app_command = True, description ="Get pokemon info")
     async def pokemon(self, ctx: commands.Context, search: str):
+        await ctx.defer()
         if not search:
             return await ctx.send("Please give a string to search with")
         try:

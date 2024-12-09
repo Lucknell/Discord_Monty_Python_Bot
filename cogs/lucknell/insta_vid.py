@@ -16,13 +16,9 @@ import asyncio
 
 class insta_vid:
     '''Uses igram.io to download videos from instagram and returns an error if something goes wrong.'''
-    def __init__(self):
-        self.start = time.time()
-    
-    def insta_getvid(self, URL):
+    def __init__(self, URL, path):
         __session = requests.Session()
         __URL = "https://snapinsta.app/"
-        path = "/src/bot/down/"
         __options = Options()
         __options.set_preference("browser.download.folderList", 2)
         __options.set_preference("browser.download.manager.showWhenStarting", False)

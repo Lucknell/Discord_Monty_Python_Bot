@@ -5,12 +5,14 @@ import sys
 import asyncio
 import random
 import requests
+import time
 import os
 import pytesseract
 import numpy as np
 from datetime import datetime
 from PIL import Image
 import shutil
+import io
 
 
 class Monty(commands.Cog):
@@ -33,9 +35,22 @@ class Monty(commands.Cog):
             return await ctx.send("invalid URL")
         url = url.string
         filename = url.split('/')[-1]
+        start = time.time()
+        size = 0
+        MAX_TIME = 2
+        MAX_SIZE = 16*1024*1024
+        chunks = b''
         with requests.get(url, stream=True) as r:
             with open(filename, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
+                for chunk in r.iter_content(1024):
+                    if time.time() - start > MAX_TIME:
+                        raise ValueError('TIMEOUT')
+                    size += len(chunk)
+                    chunks += chunk
+                    if size > MAX_SIZE:
+                        raise ValueError('TOO BIG')
+                shutil.copyfileobj(io.BytesIO(chunks), f)
+
         try:
             img = np.array(Image.open(filename))
         except Image.UnidentifiedImageError:

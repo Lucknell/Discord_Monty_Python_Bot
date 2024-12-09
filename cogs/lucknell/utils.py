@@ -1,4 +1,4 @@
-from ovos_tts_plugin_mimic3_server import Mimic3ServerTTSPlugin
+#from ovos_tts_plugin_mimic3_server import Mimic3ServerTTSPlugin
 import os
 import discord
 import rlvoice

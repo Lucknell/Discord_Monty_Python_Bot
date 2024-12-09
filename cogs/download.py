@@ -18,13 +18,7 @@ class Download(commands.Cog):
     async def download(self, ctx: commands.Context, flags: GetFlags):
         if not flags.url or not utils.valid_URL(flags.url):
             return await ctx.send("Please provide a valid url")
-        if ("v.redd.it" in flags.url or "reddit.com" in flags.url or "twitter.com" in flags.url or
-                "tiktok.com" in flags.url or "instagram.com" in flags.url or 
-                "youtube.com" in flags.url or "youtu.be" in flags.url or
-                "x.com" in flags.url):
-            return await self.add_url(ctx, flags.url, flags.msg)
-        else:
-            return await ctx.send("Unsupported sorry!")
+        return await self.add_url(ctx, flags.url, flags.msg)
 
     @commands.hybrid_command(name = "queue", with_app_command = True, description = "check for jobs currently pending")
     async def queue(self, ctx: commands.Context):
@@ -49,6 +43,10 @@ class Download(commands.Cog):
             "file": "No file",
             "message": message
         }
+        if "instagram.com" in URL:
+            client.Monty.insta_downloader.insert_one(query)
+            x = requests.get("http://192.168.1.107:5101/check_insta_jobs/"+str(ctx.guild.id))
+            return
         client["Monty"].downloader.insert_one(query)
         x = requests.get("http://192.168.1.107:5101/checkjobs/"+str(ctx.guild.id))
     

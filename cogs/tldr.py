@@ -20,15 +20,15 @@ class Tldr(commands.Cog):
     async def tldr(self, ctx: commands.Context, flags: GetFlags):
         if not flags.url or not utils.valid_URL(flags.url):
             return await ctx.send("Please provide a valid url")
-        msg = await ctx.send("loading...")
+        await ctx.defer()
         article = Article(flags.url)
         article.download()
         article.parse()
         text = self.summarize(article.text, .06)
         if len(text) > 1:
-            await msg.edit(content=(text))
+            await ctx.send(content=(text))
         else:
-            await msg.edit(content="unsupported at this time")
+            await ctx.send(content="unsupported at this time")
 
     def summarize(self, text, per):
         nlp = spacy.load('en_core_web_sm')

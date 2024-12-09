@@ -11,8 +11,6 @@ class Yugioh(commands.Cog):
 
     @commands.hybrid_command(name = "yugi", with_app_command = True, description ="It's time to duel")
     async def yugioh(self, ctx: commands.Context, search: str):
-        #if str(ctx.author.id) != "257122975508070401":
-        #    return await ctx.send("This feature is under testing.")
         if not search:
             return await ctx.send("Please give a string to search with")
         try:

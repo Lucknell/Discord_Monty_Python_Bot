@@ -23,6 +23,7 @@ class yugioh_finder:
         __yugidata = soup.findAll("img")
         if __yugidata:
             try:
+                #If image is a blue i icon, don't use it
                 if __yugidata[2]["src"] == "https://static.wikia.nocookie.net/yugioh/images/c/c8/Ambox_notice.png/revision/latest/scale-to-width-down/40?cb=20100710011553":
                     self.picture = __yugidata[3]["src"]
                 else:
