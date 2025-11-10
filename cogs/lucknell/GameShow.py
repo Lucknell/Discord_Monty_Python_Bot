@@ -1,9 +1,11 @@
+import sys
 import random
-import requests
 import asyncio
+import logging
 import discord
-from discord.ext import commands
+import requests
 from . import utils
+from discord.ext import commands
 
 class GameShow:
     class Question:
@@ -91,6 +93,14 @@ class GameShow:
         self.category = None
         self.api_url = None
         self.game = None
+        self.logger = logging.getLogger("gameshow")
+        self.logger.setLevel(logging.INFO)  # Do not allow DEBUG messages through
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(
+            logging.Formatter("{asctime}: {levelname}: {name}: {message}", style="{")
+        )
+        self.logger.addHandler(handler)
+
         
 
     async def build_api_url(self, quest_num, difficulty, category, game):
@@ -117,7 +127,7 @@ class GameShow:
             self.api_url = f"{self.api_url}&limit={__limit}"
 
         else:
-            print("Invalid game object passed. raise an exception")
+            self.logger.error("Invalid game object passed. raise an exception")
 
     async def get_questions(self, ctx, game):
         try:

@@ -7,22 +7,24 @@ class Movie_Finder:
 
     def __init__(self):
         """Scrapes cinemark.com for movies that are now playing or coming soon"""
-        self.response = requests.get("https://www.cinemark.com/movies/")
-        self.soup = BeautifulSoup(self.response.content, 'html.parser')
-        self.movie_block = self.soup.find(class_ ='col-sm-8 contentMain moviesBlockLayout').findAll(class_ = lambda L: L and 'movieBlock' in L) 
         self.movies = dict()
-        for movie in self.movie_block:
-            try:
-                self.JSON = json.loads(movie.find(class_ = lambda L: L and 'play-trailer' in L)['data-json-model'])
-                self.movies[movie['data-movie-title']] = Movie(
-                    movie['data-movie-title'],
-                    movie['data-movie-releasedate'],
-                    self.JSON.get("posterMediumImageUrl"),
-                    self.JSON.get("trailerUrl"),
-                    self.JSON.get("movieRating"),
-                    self.JSON.get("movieRunTime")) 
-            except TypeError:
-                pass
+        __urls = ["https://www.cinemark.com/movies/", "https://www.cinemark.com/movies/coming-soon"]
+        for url in __urls:
+            self.response = requests.get(url)
+            self.soup = BeautifulSoup(self.response.content, 'html.parser')
+            self.movie_block = self.soup.find(class_ ='col-sm-8 contentMain moviesBlockLayout').findAll(class_ = lambda L: L and 'movieBlock' in L) 
+            for movie in self.movie_block:
+                try:
+                    self.JSON = json.loads(movie.find(class_ = lambda L: L and 'play-trailer' in L)['data-json-model'])
+                    self.movies[movie['data-movie-title']] = Movie(
+                        movie['data-movie-title'],
+                        movie['data-movie-releasedate'],
+                        self.JSON.get("posterMediumImageUrl"),
+                        self.JSON.get("trailerUrl"),
+                        self.JSON.get("movieRating"),
+                        self.JSON.get("movieRunTime")) 
+                except TypeError:
+                    pass
         self.movies = dict(sorted(self.movies.items(), key = lambda L: datetime.strptime((L[1].release_date).split()[0], "%m/%d/%Y")))
 
 

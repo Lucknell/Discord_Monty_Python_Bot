@@ -12,14 +12,13 @@ selenium
 emoji
 PyMongo
 ffmpeg-python
-yt-dlp[default] --pre
+yt-dlp[default,curl-cffi] --pre
 wget
 rlvoice
 newspaper3k
 pypdf2
-spacy
 speechrecognition
-gpt4all
+gpt4all[cuda]
 lxml[html_clean]
 transformers
 scipy
@@ -28,3 +27,15 @@ accelerate
 datetime
 diffusers
 fake_useragent
+huggingface_hub[cli]
+instaloader
+python-dateutil
+piper-tts
+scrython
+nest-asyncio
+langchain
+langchain-ollama
+speechbrain
+openai-whisper
+grpcio
+grpcio-tools

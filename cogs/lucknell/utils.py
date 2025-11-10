@@ -1,12 +1,13 @@
-#from ovos_tts_plugin_mimic3_server import Mimic3ServerTTSPlugin
 import os
+import re
+import time
+import wave
+import random
 import discord
 import rlvoice
-import time
 import asyncio
-import random
-import re
 import traceback
+from piper.voice import PiperVoice
 
 queue = {}
 connected = {}
@@ -19,7 +20,7 @@ class SpeechQ:
         self.playing = playing
         self.speeches = speeches
 
-async def create_voice_and_play(ctx, speech, lang, client):
+async def create_voice_and_play(ctx, speech, client):
     await ctx.send(f"Attempting to say:{speech}")
     connection = None
     v_channel = ctx.message.author.voice
@@ -32,27 +33,27 @@ async def create_voice_and_play(ctx, speech, lang, client):
     # no name conflicts should be possible
     file = f"voice{millis}{ctx.message.author.id}.wav"
     if voice_queue != None:
-        return voice_queue.speeches.append((speech, file, lang))
+        return voice_queue.speeches.append((speech, file))
     try:
         voice_client = discord.utils.get(
             client.voice_clients, guild=ctx.message.guild)
         if voice_client and voice_client.is_connected():
             voice_queue = SpeechQ(ctx.message.channel, [
-                                  (speech, file, lang)], voice_client, 1)
+                                  (speech, file)], voice_client, 1)
             queue.update({ctx.message.guild.id: voice_queue})
         else:
             connection = await v_channel.channel.connect(timeout=20, reconnect=True)
             voice_queue = SpeechQ(ctx.message.channel, [
-                                  (speech, file, lang)], connection, 1)
+                                  (speech, file)], connection, 1)
             queue.update({ctx.message.guild.id: voice_queue})
             connected.update({ctx.message.guild.id: connection})
         await play_next(ctx.message.guild, client)
     except discord.errors.ClientException:
         return await connection.disconnect(force=True)
     except Exception as e:
-        print(e)
+        client.logger.error(e)
         traceback.print_exc()
-        print("Exception?")
+        client.logger.error("Exception?")
         if connection:
             await connection.disconnect(force=True)
 
@@ -79,13 +80,16 @@ async def clean_up(guild, file, client):
         try:
             os.remove(file)
         except FileNotFoundError as e:
-            print(e)
+            client.logger.error(e)
     await play_next(guild, client)
 
 
 def create_voice(curr_voice):
-    mimic = Mimic3ServerTTSPlugin()
-    mimic.get_tts(curr_voice[0], curr_voice[1], voice=curr_voice[2])
+    model = "/src/bot/models/en_US-amy-medium.onnx"
+    voice = PiperVoice.load(model)
+    wav_file = wave.open(curr_voice[1], "w")
+    audio = voice.synthesize(curr_voice[0], wav_file)
+    
     
 
 async def dc(ctx):
@@ -112,29 +116,6 @@ async def skip(ctx):
     if voice_queue == None:
         return
     voice_queue.connection.stop()
-
-
-async def join(list, word):
-    limit = len(list)
-    if (limit == 1):
-        return list[0]
-    str = ""
-    i = 0
-    for item in list:
-        str += item
-        i += 1
-        if (i != limit):
-            str += word
-    return str
-
-
-async def shift(list):
-    temp = []
-    i = 1
-    while i < len(list):
-        temp.append(list[i])
-        i += 1
-    return temp
 
 
 def is_int(str):

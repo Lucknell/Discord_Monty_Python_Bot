@@ -1,9 +1,7 @@
-from discord.ext import commands
 import discord
-import sys
-import random
-sys.path.append("/src/bot/cogs/lucknell/")
-from yugi import yugioh_finder, ShadowRealmError
+from discord.ext import commands
+from cogs.lucknell.yugi import yugioh_finder, ShadowRealmError
+
 
 class Yugioh(commands.Cog):
     def __init__(self, bot):

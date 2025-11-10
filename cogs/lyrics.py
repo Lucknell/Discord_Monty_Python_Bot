@@ -28,7 +28,7 @@ class Lyrics(commands.Cog):
         embed.add_field(
             name="Link", value=f"[Click here]({lyric.URL})")
         embed.set_footer(text=ctx.author.name, icon_url=ctx.author.avatar)
-        print(lyric.lyrics)
+        logger.info(lyric.lyrics)
         return await ctx.send(embed=embed)
 
 

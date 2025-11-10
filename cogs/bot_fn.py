@@ -1,197 +1,246 @@
-from cogs.lucknell import utils
-from discord.ext import commands
-import discord
-import sys
-import asyncio
-import random
-import requests
-import time
 import os
+import io
+import time
+import shutil
+import random
+import discord
+import requests
 import pytesseract
 import numpy as np
-from datetime import datetime
 from PIL import Image
-import shutil
-import io
+from cogs.lucknell import utils
+from discord.ext import commands
+from discord import app_commands
+from langchain_ollama import ChatOllama
 
 
 class Monty(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name = "status", with_app_command = True, description ="Status report number 2")
-    async def status(self, ctx):
-        statuses = ["Jokes on you we still alive", "I'm fine, get X go", "Systems online awaiting next task",
-                    "Damage report returned. No damage found", "You scared ain't ya?"]
+    @app_commands.command(name="status", description="Status report number 2")
+    async def status(self, interaction: discord.Interaction):
+        statuses = [
+            "Jokes on you we still alive",
+            "I'm fine, get X go",
+            "Systems online awaiting next task",
+            "Damage report returned. No damage found",
+            "You scared ain't ya?",
+        ]
         # randInt is inclusive of the upper bound
-        return await ctx.send(statuses[random.randint(0, len(statuses) - 1)])
+        return await interaction.response.send_message(
+            statuses[random.randint(0, len(statuses) - 1)]
+        )
 
-    @commands.hybrid_command(name = "totext", with_app_command = True, description ="convert an image from a URL to text")
-    async def totext(self, ctx: commands.Context, url: str):
+    @app_commands.command(name="totext", description="convert an image from a URL to text")
+    async def totext(self, interaction: discord.Interaction, url: str):
         if not url:
-            return await ctx.send("Try that again but give me a URL to an image next time")
+            return await interaction.response.send_message(
+                "Try that again but give me a URL to an image next time"
+            )
         url = utils.valid_URL(url)
         if not url:
-            return await ctx.send("invalid URL")
+            return await interaction.response.send_message("invalid URL")
         url = url.string
-        filename = url.split('/')[-1]
+        filename = url.split("/")[-1]
         start = time.time()
         size = 0
         MAX_TIME = 2
-        MAX_SIZE = 16*1024*1024
-        chunks = b''
+        MAX_SIZE = 16 * 1024 * 1024
+        chunks = b""
         with requests.get(url, stream=True) as r:
-            with open(filename, 'wb') as f:
+            with open(filename, "wb") as f:
                 for chunk in r.iter_content(1024):
                     if time.time() - start > MAX_TIME:
-                        raise ValueError('TIMEOUT')
+                        raise ValueError("TIMEOUT")
                     size += len(chunk)
                     chunks += chunk
                     if size > MAX_SIZE:
-                        raise ValueError('TOO BIG')
+                        raise ValueError("TOO BIG")
                 shutil.copyfileobj(io.BytesIO(chunks), f)
 
         try:
             img = np.array(Image.open(filename))
         except Image.UnidentifiedImageError:
             os.remove(filename)
-            return await ctx.send("Not an image")
+            return await interaction.response.send_message("Not an image")
         text = pytesseract.image_to_string(img)
         os.remove(filename)
-        await ctx.send(text)
+        await interaction.response.send_message(text)
 
-    @commands.hybrid_command(name = "good", with_app_command = False, description ="Say good bot")
+    @commands.hybrid_command(
+        name="good", with_app_command=False, description="Say good bot"
+    )
     async def good(self, ctx: commands.Context, word: str):
         if arg.lower() == "bot":
             await ctx.message.add_reaction("😄")
 
-    @commands.hybrid_command(name = "bad", with_app_command = False, description ="Say bad bot")
+    @commands.hybrid_command(
+        name="bad", with_app_command=False, description="Say bad bot"
+    )
     async def bad(self, ctx: commands.Context, word: str):
         if arg.lower() == "bot":
             await ctx.send("alright then.")
 
-    @commands.hybrid_command(name = "about", with_app_command = True, description ="learn more")
-    async def about(self, ctx: commands.Context):
-        return await ctx.send("You can learn more about me here\nhttps://github.com/Lucknell/Discord_Monty_Python_Bot")
+    @app_commands.command(name="about", description="learn more about me")
+    async def about(self, interaction: discord.Interaction):
+        return await interaction.response.send_message(
+            "You can learn more about me here\nhttps://github.com/Lucknell/Discord_Monty_Python_Bot"
+        )
 
-    @commands.hybrid_command(name = "poll", with_app_command = True, description ="Put something to a vote add the choices with comma separated value")
-    async def vote(self, ctx: commands.Context, poll_question: str, opt: str):
-        current = ['0️⃣', '1️⃣', '2️⃣', '3️⃣',
-                   '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
-        choices = opt.split(",") 
-        if len(choices) < 2:
-            return await ctx.send("Not enough choices to make the poll")
-        if len(choices) > 10:
-            return await ctx.send("Too many choices")
-        i = -1
-        s = f"{poll_question}\nHere are the choices react below"
-        vote = await ctx.send("loading...")
-        for choice in choices:
-            i += 1
-            s += "\n" + current[i] + ": " + choice
-        s += "\npoll id is: {}".format(vote.id)
-        for emoji in current[:len(choices)]:
-            await vote.add_reaction(emoji)
-        await vote.edit(content=s)
 
-    @commands.hybrid_command(name = "count", with_app_command = True, description ="This may be broken...")
-    async def count(self, ctx: commands.Context, id: str):
-        if not id:
-            return
-        poll = await ctx.channel.fetch_message(id)
-        if not poll.content.endswith("poll id is: {}".format(id)):
-            return await ctx.send("invalid poll")
-        current = ['0️⃣', '1️⃣', '2️⃣', '3️⃣',
-                   '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
-        valid_voters = [self.bot.user.id]
-
-        count = len(poll.content.split("\n")) - 3
-        options = {x[:3]: x[4:] for x in poll.content.split("\n")[2:count+1]}
-        print(count, options)
-        tally = {x: 0 for x in current[:count]}
-        for reaction in poll.reactions:
-            if reaction.emoji in current[:count]:
-                voters = [user async for user in reaction.users()]
-                for voter in voters:
-                    if voter.id not in valid_voters:
-                        tally[reaction.emoji] += 1
-                        valid_voters.append(voter.id)
-        results = "Final results\n"
-        results += "\n".join(['{}: {}'.format(options[key], tally[key])
-                              for key in tally.keys()])
-        await ctx.send(results)
-        await poll.delete()
-
-    @commands.hybrid_command(name = "react", with_app_command = True, description ="This stuff takes some concentration you know...")
-    async def reaction(self, ctx: commands.Context, message_id: str, phrases: str):
+    @app_commands.command(
+        name="react", description="This stuff takes some concentration you know..."
+    )
+    async def reaction(
+        self, interaction: discord.Interaction, message_id: str, phrases: str
+    ):
         if not message_id or not phrases:
-            return await ctx.send("I need a message id like {} and a phrase like **uncopyrightable**".format(ctx.message.id))
+            return await interaction.response.send_message(
+                "I need a message id like {} and a phrase like **uncopyrightable**".format(
+                    interaction.message.id
+                )
+            )
         try:
-            msg = await ctx.channel.fetch_message(message_id)
+            msg = await interaction.channel.fetch_message(message_id)
         except discord.errors.NotFound:
-            return await ctx.send("invalid id")
+            return await interaction.response.send_message("invalid id")
         except discord.errors.HTTPException:
-            return await ctx.send("invalid id")
-        await ctx.send("Done.", ephemeral = True)
+            return await interaction.response.send_message("invalid id")
+        await interaction.response.send_message("Done.", ephemeral=True)
         letters = []
-        emojis = {"a": "🇦",
-                  "b": "🇧",
-                  "c": "🇨",
-                  "d": "🇩",
-                  "e": "🇪",
-                  "f": "🇫",
-                  "g": "🇬",
-                  "h": "🇭",
-                  "i": "🇮",
-                  "j": "🇯",
-                  "k": "🇰",
-                  "l": "🇱",
-                  "m": "🇲",
-                  "n": "🇳",
-                  "o": "🅾️",
-                  "p": "🅿️",
-                  "q": "🇶",
-                  "r": "🇷",
-                  "s": "🇸",
-                  "t": "🇹",
-                  "u": "🇺",
-                  "v": "🇻",
-                  "w": "🇼",
-                  "x": "🇽",
-                  "y": "🇾",
-                  "z": "🇿",
-                  "#": "#️⃣",
-                  "0": "0️⃣",
-                  "1": "1️⃣",
-                  "2": "2️⃣",
-                  "3": "3️⃣",
-                  "4": "4️⃣",
-                  "5": "5️⃣",
-                  "6": "6️⃣",
-                  "7": "7️⃣",
-                  "8": "8️⃣",
-                  "9": "9️⃣"}
+        emojis = {
+            "a": "🇦",
+            "b": "🇧",
+            "c": "🇨",
+            "d": "🇩",
+            "e": "🇪",
+            "f": "🇫",
+            "g": "🇬",
+            "h": "🇭",
+            "i": "🇮",
+            "j": "🇯",
+            "k": "🇰",
+            "l": "🇱",
+            "m": "🇲",
+            "n": "🇳",
+            "o": "🅾️",
+            "p": "🅿️",
+            "q": "🇶",
+            "r": "🇷",
+            "s": "🇸",
+            "t": "🇹",
+            "u": "🇺",
+            "v": "🇻",
+            "w": "🇼",
+            "x": "🇽",
+            "y": "🇾",
+            "z": "🇿",
+            "#": "#️⃣",
+            "0": "0️⃣",
+            "1": "1️⃣",
+            "2": "2️⃣",
+            "3": "3️⃣",
+            "4": "4️⃣",
+            "5": "5️⃣",
+            "6": "6️⃣",
+            "7": "7️⃣",
+            "8": "8️⃣",
+            "9": "9️⃣",
+        }
         phrase = phrases.lower().split(" ")
-        phrases = await utils.join(phrase, "")
+        phrases = "".join(phrase)
         for letter in str(phrases):
-            if not letter in letters:
-                letters.append(letter)
+            if letter in letters:
+                return await interaction.response.send_message(
+                    "https://tenor.com/view/invader-zim-movie-enter-the-gif-14899370"
+                )
             else:
-                return await ctx.send("https://tenor.com/view/invader-zim-movie-enter-the-gif-14899370")
+                letters.append(letter)
         for letter in letters:
             try:
                 await msg.add_reaction(emojis[letter])
             except KeyError:
                 pass
 
-    @commands.hybrid_command(name = "flip", with_app_command = True, description ="flip a coin")
-    async def flip(self, ctx: commands.Context):
+    @app_commands.command(
+        name="smartreact", description="This stuff takes some concentration you know..."
+    )
+    async def smart_reaction(
+        self, interaction: discord.Interaction, message_id: str
+    ):
+        if not message_id:
+            return await interaction.response.send_message(
+                "I need a message id like {} and a phrase like **uncopyrightable**".format(
+                    interaction.message.id
+                )
+            )
+        # https://discord.com/channels/760693283885416458/760693285072797709/1403276585691512902
+        try:
+            if "https://" in message_id:
+                message_id = message_id.split("/")[-1]
+            msg = await interaction.channel.fetch_message(message_id)
+        except discord.errors.NotFound:
+            return await interaction.response.send_message("invalid id")
+        except discord.errors.HTTPException:
+            return await interaction.response.send_message("invalid id")
+        await interaction.response.send_message("I am cooking up something.", ephemeral=True)
+        prompt = f"""
+        “You are an emoji translator.  Your task is to analyze a given text
+message and generate a response consisting *only* of emojis.  For each
+message, produce a CSV output containing only Emojis. The CSV output contains a sequence
+of emojis separated by a comma, representing the most appropriate reaction to the ‘Original
+Message’.  Do not include any explanations, introductions, or additional
+text beyond the emoji response.  Focus solely on the emoji translation.
+
+**Example:**
+
+**Input Message:** “I just won the lottery!”
+
+**Output CSV:**
+
+🎉,🥳,💰,🤩
+
+**Now, take the following message and generate the CSV Emoji response:**
+
+'{msg.content}'.
+
+**Notes for the AI:**
+
+*   Emphasize that the response *must* be only emojis.
+*   Specify the CSV format clearly.
+*   Provide a clear example to illustrate the desired output.
+*   Response MUST contain a comma.
+        """
+        model = ChatOllama(model="gemma3", base_url="http://192.168.1.107:11434/")
+        messages = [
+            (
+                "system",
+                """
+                Respond back with only emojis in an array list. Only return the list. Do not wrap the response in a code block
+                """,
+            ),
+            ("human", prompt),
+        ]
+        response = model.invoke(prompt)
+        self.bot.logger.info(response)
+        emojis = response.content.split(",")
+        self.bot.logger.info(emojis)
+        for emoji in emojis:
+            try:
+                await msg.add_reaction(emoji.strip().lstrip())
+            except discord.HTTPException:
+                self.bot.logger.error(emoji)
+    @app_commands.command(name="flip", description="flip a coin")
+    async def flip(self, interaction: discord.Interaction):
         coin = random.randint(0, 1)
         if coin == 1:
-            return await ctx.send("Heads")
+            return await interaction.response.send_message("Heads")
         else:
-            return await ctx.send("Tails")
-        
+            return await interaction.response.send_message("Tails")
+    
+    
+    
 
 async def setup(bot):
     await bot.add_cog(Monty(bot))
