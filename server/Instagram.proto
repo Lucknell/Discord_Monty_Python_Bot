@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "./grpc-instagram-server";
+
+service DownloadInstagramPost {
+    rpc Download(InstagramRequest) returns (InstagramResponse) {}
+}
+
+message InstagramRequest {
+    string url   = 1;
+    int64 guild  = 2;
+    string state = 3;
+}
+
+message InstagramResponse {
+    bool success = 1;
+}
